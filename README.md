@@ -54,6 +54,8 @@ The `src/cta_importer/` package provides game-agnostic, plugin-based import infr
 
 Architecture: `docs/importer-architecture.md`
 
+Future-session handoff: `docs/handoff.md`
+
 ## Repository Data Boundary
 
 This repository contains extraction and importer tooling, tests, migrations, and investigation documentation—not the extracted game dataset. Extracted content and proprietary assets are intentionally excluded from Git.
