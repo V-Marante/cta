@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Allow-list validation for the explicitly prepared public release directory."""
 import argparse
+import hashlib
+import json
 import os
 import re
 import sqlite3
@@ -8,22 +10,15 @@ from pathlib import Path
 
 ALLOWED_ROOT_FILES = {"cta.sqlite", "import-manifest.json", "asset-manifest.json"}
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".webp", ".avif"}
-EXPECTED_TABLES = {"schema_migrations", "import_runs", "parser_executions", "artifacts", "entities", "relations", "localizations", "diagnostics", "sqlite_sequence"}
+EXPECTED_TABLES = {"release_info", "catalog_entities", "catalog_text", "catalog_relations"}
 ALLOWED_COLUMNS = {
-    "schema_migrations": {"version", "checksum", "applied_at"},
-    "import_runs": {"id", "game_id", "game_version", "build", "content_version", "source_digest", "parser_set_digest", "source_root", "status", "started_at", "finished_at", "version_metadata_json", "error_message"},
-    "parser_executions": {"import_id", "artifact_path", "parser_id", "parser_version", "output_schema_version", "status", "entity_count", "relation_count", "localization_count"},
-    "artifacts": {"import_id", "relative_path", "byte_size", "sha256", "media_type", "parser_id"},
-    "entities": {"import_id", "parser_id", "output_schema_version", "namespace", "entity_key", "ordinal", "payload_json", "source_path", "source_line", "source_column", "source_record"},
-    "relations": {"id", "import_id", "parser_id", "output_schema_version", "relation", "source_namespace", "source_key", "target_namespace", "target_key", "ordinal", "payload_json", "source_path", "source_line", "source_column", "source_record"},
-    "localizations": {"import_id", "parser_id", "output_schema_version", "namespace", "entity_key", "locale", "field", "value", "source_path", "source_line", "source_column", "source_record"},
-    "diagnostics": {"id", "import_id", "severity", "code", "message", "parser_id", "source_path", "source_line", "source_column", "source_record", "details_json"},
+    "release_info": {"id", "game_id", "game_version", "finished_at"},
+    "catalog_entities": {"release_id", "kind", "entity_id", "payload_json"},
+    "catalog_text": {"release_id", "kind", "entity_id", "locale", "field", "value"},
+    "catalog_relations": {"release_id", "kind", "source_id", "target_id", "ordinal", "payload_json"},
 }
 REQUIRED_COLUMNS = {
-    "import_runs": {"id", "game_id", "status", "finished_at"},
-    "entities": {"import_id", "namespace", "entity_key", "payload_json"},
-    "relations": {"import_id", "relation", "source_key", "target_key", "ordinal", "payload_json", "source_path", "source_record"},
-    "localizations": {"import_id", "namespace", "entity_key", "locale", "field", "value"},
+    table: columns for table, columns in ALLOWED_COLUMNS.items()
 }
 MAX_DATABASE = 250 * 1024 * 1024
 MAX_IMAGE = 5 * 1024 * 1024
@@ -42,6 +37,7 @@ def main() -> int:
     if not root.is_dir():
         fail(f"expected directory does not exist: {root}")
     database = root / "cta.sqlite"
+    manifest = root / "import-manifest.json"
     if not database.is_file() or database.is_symlink():
         fail("cta.sqlite is missing or is a symlink")
     if database.stat().st_size > MAX_DATABASE:
@@ -70,7 +66,7 @@ def main() -> int:
         unexpected = tables - EXPECTED_TABLES
         if unexpected:
             fail(f"unexpected SQLite tables: {sorted(unexpected)}")
-        required = {"import_runs", "entities", "relations", "localizations"}
+        required = EXPECTED_TABLES
         if not required <= tables:
             fail(f"missing SQLite tables: {sorted(required - tables)}")
         for table in tables & ALLOWED_COLUMNS.keys():
@@ -79,10 +75,34 @@ def main() -> int:
                 fail(f"unexpected SQLite columns in {table}: {sorted(columns - ALLOWED_COLUMNS[table])}")
             if table in REQUIRED_COLUMNS and not REQUIRED_COLUMNS[table] <= columns:
                 fail(f"missing SQLite columns in {table}: {sorted(REQUIRED_COLUMNS[table] - columns)}")
+        if db.execute("SELECT count(*) FROM release_info").fetchone()[0] != 1:
+            fail("public database must contain exactly one release")
+        release_id, game_version = db.execute("SELECT id,game_version FROM release_info").fetchone()
+        entity_kinds = {row[0] for row in db.execute("SELECT DISTINCT kind FROM catalog_entities")}
+        allowed_entity_kinds = {"hero", "hero_classification", "portrait", "skill", "acquisition_source"}
+        if entity_kinds - allowed_entity_kinds:
+            fail(f"unexpected public entity kinds: {sorted(entity_kinds - allowed_entity_kinds)}")
+        relation_kinds = {row[0] for row in db.execute("SELECT DISTINCT kind FROM catalog_relations")}
+        if relation_kinds - {"character_skill", "hero_acquisition"}:
+            fail(f"unexpected public relation kinds: {sorted(relation_kinds)}")
+        non_collectible = db.execute("""SELECT count(*) FROM catalog_entities
+            WHERE kind='hero_classification' AND json_extract(payload_json,'$.kind')!='collectible'""").fetchone()[0]
+        if non_collectible:
+            fail("public database contains non-collectible hero classifications")
         for table in required:
             for row in db.execute(f"SELECT * FROM {table}"):
                 if SENSITIVE.search(" ".join(str(value) for value in row if value is not None)):
                     fail(f"obvious local path or credential-like value in table {table}")
+    if manifest.is_file():
+        try:
+            metadata = json.loads(manifest.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            fail(f"invalid import-manifest.json: {error}")
+        digest = f"sha256:{hashlib.sha256(database.read_bytes()).hexdigest()}"
+        if metadata.get("databaseHash") != digest:
+            fail("import manifest databaseHash does not match cta.sqlite")
+        if metadata.get("dataImportId") != release_id or metadata.get("gameVersion") != game_version:
+            fail("import manifest release metadata does not match release_info")
     print(f"public artifacts valid: {root}")
     return 0
 

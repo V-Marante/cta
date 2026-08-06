@@ -42,19 +42,16 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-        env:
-          VITE_API_URL: https://api.invalid.example
-          VITE_ASSET_BASE_URL: https://assets.invalid.example
 
   container-ci:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create and validate synthetic public database
+      - name: Validate synthetic public database generator
         run: |
-          python3 scripts/create-synthetic-public-db.py artifacts/public/cta.sqlite
-          scripts/validate-public-artifacts.sh artifacts/public
-      - name: Build production image
-        run: docker build --tag cta-api:ci --build-arg VCS_REF=${{ github.sha }} .
-      - name: Start and smoke-test image
-        run: RELEASE_IMAGE=cta-api:ci scripts/smoke-test-image.sh
+          python3 scripts/create-synthetic-public-db.py /tmp/cta-synthetic/cta.sqlite
+          scripts/validate-public-artifacts.sh /tmp/cta-synthetic
+      - name: Build synthetic unified image
+        run: docker build --target runtime --build-arg RELEASE_MODE=synthetic --build-arg VCS_REF=${{ github.sha }} --tag cta:synthetic .
+      - name: Start and smoke-test unified image
+        run: RELEASE_IMAGE=cta:synthetic scripts/smoke-test-image.sh

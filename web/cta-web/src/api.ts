@@ -2,13 +2,17 @@ import type { Filters, HeroDetailModel, HeroPage, HeroQuery } from './models'
 
 // Development uses Vite's same-origin proxy. Besides simplifying API calls, this
 // keeps portrait pixels readable by the tier-list export canvas.
-export function normalizeBaseUrl(value: string | undefined, production = import.meta.env.PROD): string {
-  const normalized = value?.trim().replace(/\/$/, '') ?? ''
-  if (production && !normalized) throw new Error('VITE_API_URL is required for production builds')
-  return normalized
+export function normalizeBaseUrl(value: string | undefined): string {
+  return value?.trim().replace(/\/$/, '') ?? ''
 }
 
 export const API_URL = normalizeBaseUrl(import.meta.env.VITE_API_URL)
+export const ASSETS_VERSION = import.meta.env.VITE_ASSETS_VERSION?.trim() || 'synthetic'
+
+export function publicAssetUrl(path: string, fallbackBase = API_URL): string {
+  if (/^https?:\/\//.test(path)) return path
+  return `${fallbackBase.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`
+}
 
 async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { signal })

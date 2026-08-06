@@ -125,18 +125,25 @@ public sealed class HeroApiTests
     }
 
     [Fact]
-    public async Task Production_cors_allows_only_the_configured_frontend_origin()
+    public void Importer_database_is_rejected_instead_of_failing_on_the_first_api_query()
+    {
+        using var factory = new ApiFactory(validPublicSchema: false);
+        var exception = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+        Assert.Contains("not a prepared public catalogue", exception.ToString());
+    }
+
+    [Fact]
+    public async Task Unified_host_serves_frontend_routes_assets_and_preserves_404_boundaries()
     {
         using var factory = new ApiFactory(environment: "Production");
         var client = factory.CreateClient();
-        using var allowed = new HttpRequestMessage(HttpMethod.Get, "/health");
-        allowed.Headers.Add("Origin", "https://frontend.example.test");
-        var allowedResponse = await client.SendAsync(allowed);
-        Assert.Equal("https://frontend.example.test", allowedResponse.Headers.GetValues("Access-Control-Allow-Origin").Single());
-        using var denied = new HttpRequestMessage(HttpMethod.Get, "/health");
-        denied.Headers.Add("Origin", "http://localhost:5173");
-        var deniedResponse = await client.SendAsync(denied);
-        Assert.False(deniedResponse.Headers.Contains("Access-Control-Allow-Origin"));
+        Assert.Contains("CTA synthetic frontend", await client.GetStringAsync("/"));
+        Assert.Contains("CTA synthetic frontend", await client.GetStringAsync("/team-planner"));
+        var asset = await client.GetAsync("/assets/heroes/test-assets/Alpha.png");
+        Assert.Equal(HttpStatusCode.OK, asset.StatusCode);
+        Assert.Contains("immutable", asset.Headers.CacheControl?.Extensions.Select(x => x.Name) ?? []);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/assets/heroes/test-assets/Missing.png")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/missing")).StatusCode);
     }
 
     [Fact]
@@ -145,11 +152,9 @@ public sealed class HeroApiTests
         using var factory = new ApiFactory(withUiIcon: true);
         var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/ui-icons/elements/fire.png");
-        request.Headers.Add("Origin", "http://localhost:5173");
         var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
-        Assert.Equal("http://localhost:5173", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/ui-icons/elements/fire.png", null)).StatusCode);
     }
 
@@ -163,21 +168,19 @@ public sealed class HeroApiTests
         var hero = (await Get(client, "/api/heroes/Alpha")).GetProperty("hero");
         Assert.Equal("/portraits/Alpha.png", hero.GetProperty("portraitUrl").GetString());
         using var request = new HttpRequestMessage(HttpMethod.Get, "/portraits/Alpha.png");
-        request.Headers.Add("Origin", "http://localhost:5173");
         var portrait = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, portrait.StatusCode);
-        Assert.Equal("http://localhost:5173", portrait.Headers.GetValues("Access-Control-Allow-Origin").Single());
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/portraits/Alpha.png", null)).StatusCode);
     }
 
     [Fact]
-    public async Task External_portrait_mode_returns_a_stable_versioned_asset_path_without_local_files()
+    public async Task Bundled_portrait_mode_returns_a_same_origin_versioned_asset_path()
     {
-        using var factory = new ApiFactory("cta", portraitMode: "external");
+        using var factory = new ApiFactory("cta", portraitMode: "bundled");
         factory.Seed("current", "cta", "2026-02-01", new HeroSeed("Alpha", "Alpha Hero"));
         factory.SeedPortraitReference("current", "Alpha");
         var hero = (await Get(factory.CreateClient(), "/api/heroes/Alpha")).GetProperty("hero");
-        Assert.Equal("heroes/test-assets/Alpha.webp", hero.GetProperty("portraitUrl").GetString());
+        Assert.Equal("/assets/heroes/test-assets/Alpha.png", hero.GetProperty("portraitUrl").GetString());
     }
 
     [Fact]

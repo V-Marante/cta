@@ -28,11 +28,11 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
         var acquisitions = await Acquisitions(db, importId);
         await using var command = db.CreateCommand();
         command.CommandText = """
-          SELECT h.entity_key, h.payload_json,
-            (SELECT value FROM localizations l WHERE l.import_id=h.import_id AND l.namespace='hero' AND lower(l.entity_key)=lower(h.entity_key) AND l.locale='en' AND l.field='name' LIMIT 1),
-            EXISTS(SELECT 1 FROM entities p WHERE p.import_id=h.import_id AND p.namespace='portrait' AND lower(p.entity_key)=lower(h.entity_key)),
-            (SELECT payload_json FROM entities c WHERE c.import_id=h.import_id AND c.namespace='hero_classification' AND lower(c.entity_key)=lower(h.entity_key) LIMIT 1)
-          FROM entities h WHERE h.import_id=$import AND h.namespace='hero'
+          SELECT h.entity_id, h.payload_json,
+            (SELECT value FROM catalog_text l WHERE l.release_id=h.release_id AND l.kind='hero' AND lower(l.entity_id)=lower(h.entity_id) AND l.locale='en' AND l.field='name' LIMIT 1),
+            EXISTS(SELECT 1 FROM catalog_entities p WHERE p.release_id=h.release_id AND p.kind='portrait' AND lower(p.entity_id)=lower(h.entity_id)),
+            (SELECT payload_json FROM catalog_entities c WHERE c.release_id=h.release_id AND c.kind='hero_classification' AND lower(c.entity_id)=lower(h.entity_id) LIMIT 1)
+          FROM catalog_entities h WHERE h.release_id=$import AND h.kind='hero'
           """;
         command.Parameters.AddWithValue("$import", importId);
         var result = new List<HeroSummary>();
@@ -49,9 +49,7 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
     private string? PortraitUrl(string id, bool hasReference) => options.Value.PortraitMode.ToLowerInvariant() switch
     {
         "none" => null,
-        "external" when hasReference => options.Value.PortraitPathTemplate
-            .Replace("{version}", Uri.EscapeDataString(options.Value.AssetsVersion), StringComparison.Ordinal)
-            .Replace("{id}", Uri.EscapeDataString(id), StringComparison.Ordinal),
+        "bundled" when hasReference => $"/assets/heroes/{Uri.EscapeDataString(options.Value.AssetsVersion)}/{Uri.EscapeDataString(id)}.png",
         "local" when hasReference && _portraitIds.Contains(id) => $"/portraits/{Uri.EscapeDataString(id)}.png",
         _ => null,
     };
@@ -66,11 +64,11 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
         var descriptions = await LocalizationMap(db, importId, "skill_description", "description");
         await using var command = db.CreateCommand();
         command.CommandText = """
-          SELECT s.entity_key, s.payload_json,
-            (SELECT value FROM localizations l WHERE l.import_id=s.import_id AND l.namespace='skill' AND l.entity_key=s.entity_key AND l.locale='en' AND l.field='name'),
-            (SELECT value FROM localizations l WHERE l.import_id=s.import_id AND l.namespace='skill' AND l.entity_key=s.entity_key AND l.locale='en' AND l.field='description')
-          FROM relations r JOIN entities s ON s.import_id=r.import_id AND s.namespace='skill' AND lower(s.entity_key)=lower(r.target_key)
-          WHERE r.import_id=$import AND r.relation='character_skill' AND lower(r.source_key)=lower($hero) AND coalesce(json_extract(r.payload_json, '$.kind'), 'skill')='skill' ORDER BY r.ordinal
+          SELECT s.entity_id, s.payload_json,
+            (SELECT value FROM catalog_text l WHERE l.release_id=s.release_id AND l.kind='skill' AND l.entity_id=s.entity_id AND l.locale='en' AND l.field='name'),
+            (SELECT value FROM catalog_text l WHERE l.release_id=s.release_id AND l.kind='skill' AND l.entity_id=s.entity_id AND l.locale='en' AND l.field='description')
+          FROM catalog_relations r JOIN catalog_entities s ON s.release_id=r.release_id AND s.kind='skill' AND lower(s.entity_id)=lower(r.target_id)
+          WHERE r.release_id=$import AND r.kind='character_skill' AND lower(r.source_id)=lower($hero) AND coalesce(json_extract(r.payload_json, '$.kind'), 'skill')='skill' ORDER BY r.ordinal
           """;
         command.Parameters.AddWithValue("$import", importId); command.Parameters.AddWithValue("$hero", heroId);
         var result = new List<SkillDto>();
@@ -96,7 +94,7 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
     private static async Task<Dictionary<string, string>> LocalizationMap(Microsoft.Data.Sqlite.SqliteConnection db, string importId, string ns, string field)
     {
         await using var command = db.CreateCommand();
-        command.CommandText = "SELECT entity_key,value FROM localizations WHERE import_id=$import AND namespace=$namespace AND locale='en' AND field=$field";
+        command.CommandText = "SELECT entity_id,value FROM catalog_text WHERE release_id=$import AND kind=$namespace AND locale='en' AND field=$field";
         command.Parameters.AddWithValue("$import", importId); command.Parameters.AddWithValue("$namespace", ns); command.Parameters.AddWithValue("$field", field);
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         await using var rows = await command.ExecuteReaderAsync(); while (await rows.ReadAsync()) result[rows.GetString(0)] = rows.GetString(1);
@@ -105,7 +103,7 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
 
     private static async Task<Dictionary<string, List<Dictionary<string, string>>>> AbilityParameters(Microsoft.Data.Sqlite.SqliteConnection db, string importId)
     {
-        await using var command = db.CreateCommand(); command.CommandText = "SELECT r.source_key,s.payload_json FROM relations r JOIN entities s ON s.import_id=r.import_id AND s.namespace='skill' AND lower(s.entity_key)=lower(r.target_key) WHERE r.import_id=$import AND r.relation='character_skill' AND json_extract(r.payload_json,'$.kind')='ability'"; command.Parameters.AddWithValue("$import", importId);
+        await using var command = db.CreateCommand(); command.CommandText = "SELECT r.source_id,s.payload_json FROM catalog_relations r JOIN catalog_entities s ON s.release_id=r.release_id AND s.kind='skill' AND lower(s.entity_id)=lower(r.target_id) WHERE r.release_id=$import AND r.kind='character_skill' AND json_extract(r.payload_json,'$.kind')='ability'"; command.Parameters.AddWithValue("$import", importId);
         var result = new Dictionary<string, List<Dictionary<string, string>>>(StringComparer.OrdinalIgnoreCase);
         await using var rows = await command.ExecuteReaderAsync(); while (await rows.ReadAsync()) { using var json = JsonDocument.Parse(rows.GetString(1)); if (!result.TryGetValue(rows.GetString(0), out var effects)) result[rows.GetString(0)] = effects = []; foreach (var component in json.RootElement.GetProperty("components").EnumerateArray().Where(x => HeroMapper.GetString(x, "kind") == "effect")) effects.Add(component.GetProperty("attributes").EnumerateObject().ToDictionary(x => x.Name, x => x.Value.GetString() ?? "", StringComparer.OrdinalIgnoreCase)); }
         return result;
@@ -114,16 +112,16 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
     private static async Task<Dictionary<string, List<AcquisitionDto>>> Acquisitions(Microsoft.Data.Sqlite.SqliteConnection db, string importId)
     {
         await using var command = db.CreateCommand(); command.CommandText = """
-          SELECT r.source_key,r.target_key,r.payload_json,
-            coalesce(l.value,json_extract(a.payload_json,'$.name'),r.target_key),
-            coalesce(json_extract(a.payload_json,'$.kind'),'chest'), r.source_path, r.source_record
-          FROM relations r
-          LEFT JOIN localizations l ON l.import_id=r.import_id AND l.namespace='acquisition_source' AND l.entity_key=r.target_key AND l.locale='en' AND l.field='name'
-          LEFT JOIN entities a ON a.import_id=r.import_id AND a.namespace='acquisition_source' AND a.entity_key=r.target_key
-          WHERE r.import_id=$import AND r.relation='hero_acquisition'
+          SELECT r.source_id,r.target_id,r.payload_json,
+            coalesce(l.value,json_extract(a.payload_json,'$.name'),r.target_id),
+            coalesce(json_extract(a.payload_json,'$.kind'),'chest')
+          FROM catalog_relations r
+          LEFT JOIN catalog_text l ON l.release_id=r.release_id AND l.kind='acquisition_source' AND l.entity_id=r.target_id AND l.locale='en' AND l.field='name'
+          LEFT JOIN catalog_entities a ON a.release_id=r.release_id AND a.kind='acquisition_source' AND a.entity_id=r.target_id
+          WHERE r.release_id=$import AND r.kind='hero_acquisition'
           """; command.Parameters.AddWithValue("$import", importId);
         var result = new Dictionary<string, List<AcquisitionDto>>(StringComparer.OrdinalIgnoreCase);
-        await using var rows = await command.ExecuteReaderAsync(); while (await rows.ReadAsync()) { using var json = JsonDocument.Parse(rows.GetString(2)); if (!result.TryGetValue(rows.GetString(0), out var sources)) result[rows.GetString(0)] = sources = []; var currentValue = !json.RootElement.TryGetProperty("current", out var current) || current.ValueKind != JsonValueKind.False; sources.Add(new(rows.GetString(1), rows.GetString(3), rows.GetString(4), HeroMapper.GetString(json.RootElement, "medal_id"), currentValue, HeroMapper.GetString(json.RootElement, "evidence_type") ?? "explicit_configuration", HeroMapper.GetString(json.RootElement, "status") ?? (currentValue ? "current" : "historical"), HeroMapper.GetString(json.RootElement, "source_path") ?? (rows.IsDBNull(5) ? null : rows.GetString(5)), HeroMapper.GetString(json.RootElement, "source_record") ?? (rows.IsDBNull(6) ? null : rows.GetString(6)))); }
+        await using var rows = await command.ExecuteReaderAsync(); while (await rows.ReadAsync()) { using var json = JsonDocument.Parse(rows.GetString(2)); if (!result.TryGetValue(rows.GetString(0), out var sources)) result[rows.GetString(0)] = sources = []; var currentValue = !json.RootElement.TryGetProperty("current", out var current) || current.ValueKind != JsonValueKind.False; sources.Add(new(rows.GetString(1), rows.GetString(3), rows.GetString(4), HeroMapper.GetString(json.RootElement, "medal_id"), currentValue, HeroMapper.GetString(json.RootElement, "evidence_type") ?? "explicit_configuration", HeroMapper.GetString(json.RootElement, "status") ?? (currentValue ? "current" : "historical"), null, null)); }
         return result;
     }
 

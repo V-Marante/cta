@@ -44,7 +44,7 @@ Endpoints:
 - `GET /api/heroes/filters`: collectible-only class, tribe, element, damage-type, rarity, mobility, acquisition, and attribute metadata.
 - `GET /api/heroes/{id}`: hero summary plus ordered visible skills.
 - `GET /api/heroes/{id}/skills`: ordered visible skills.
-- Vite proxies `/api`, `/health`, `/portraits`, and `/ui-icons` to the local API by default. Keeping local assets same-origin prevents browser canvas security from blocking tier-list PNG exports; an explicitly configured cross-origin `VITE_API_URL` requires the API's configured `WebOrigin` policy.
+- Vite proxies `/api`, health endpoints, and `/assets` to the local API. Production serves the compiled SPA, API, and versioned assets from one Fly origin.
 - `GET /health`: `{ "status": "ok" }`.
 - `/portraits/{id}.png`: served only when a configured local compact icon exists.
 
@@ -120,7 +120,8 @@ PYTHONPATH=src python3 -m cta_importer import \
 Run the API and frontend:
 
 ```bash
-Database=extracted/cta.sqlite GameId=com.godzilab.idlerpg \
+./scripts/prepare-public-release.sh extracted/cta.sqlite
+Database=artifacts/public/cta.sqlite GameId=com.godzilab.idlerpg \
   dotnet run --project api/Cta.Api --urls http://localhost:5080
 npm run dev --prefix web/cta-web
 ```
@@ -165,4 +166,4 @@ Acceptance criteria:
 7. Only human-written code, tests, migrations, and documentation are eligible for staging; no APK, extraction, proprietary asset, database, generated audit, or smoke output is staged.
 # Deployment handoff
 
-Production uses a static Cloudflare Pages frontend, an immutable Fly.io API image containing sanitized read-only SQLite, and optional versioned R2 portraits. Extraction remains local, and CI uses synthetic data only. See `docs/deployment.md` for the complete manual checklist, release boundary, rollback, cost controls, and proprietary-content review.
+Production uses one immutable Fly.io image containing the API, compiled frontend, versioned assets, and purpose-built read-only SQLite catalogue. Production inputs remain local and CI uses generated synthetic inputs. See `docs/deployment.md`.

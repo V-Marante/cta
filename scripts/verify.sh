@@ -1,5 +1,5 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env bash
+set -euo pipefail
 
 repository_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repository_root"

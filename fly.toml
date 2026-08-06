@@ -1,4 +1,3 @@
-app = "rgc-cta-api"
 primary_region = "arn"
 
 [checks.ready]

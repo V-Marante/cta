@@ -1,115 +1,90 @@
-# Deployment and data-release guide
+# Unified Fly.io deployment
 
-For routine releases after setup, follow the copy/paste [release runbook](release-runbook.md). It separates frontend-only, backend/container, Fly configuration, new SQLite extraction, asset, and mixed releases.
+## Architecture
 
-## Architecture and trust boundary
+One locally built Docker image contains the published ASP.NET Core API, compiled React/Vite frontend, reviewed versioned portraits and UI icons, and a purpose-built SQLite catalogue. ASP.NET Core serves `/api/*`, the SPA, and `/assets/*` from one Fly.io origin. The database is `/app/data/cta.sqlite`, mode `0444`, and every application connection uses SQLite read-only mode. There is no Fly volume.
 
-The frontend is a static Vite build for Cloudflare Pages. The public API runs on one auto-stopping Fly Machine. Its read-only SQLite file is copied into the image, so image and data are one immutable release. Versioned portraits are published separately to R2 (or another static host). Team Planner state remains in browser `localStorage`.
+Team Planner and tier-list state remain browser-local. GitHub contains source plus synthetic test inputs only. Production extraction, data, and proprietary assets stay local and ignored. Cloudflare Pages and R2 are not runtime dependencies; equivalent SPA routing, security headers, and cache policy now live in ASP.NET Core.
 
-Extraction and importing are local-only. GitHub Actions never receives APKs, raw extraction trees, proprietary source assets, credentials, or the production database. This repository uses **Pattern C: prebuilt backend image**: the owner prepares and reviews public artifacts, builds and tests the image locally, pushes that exact image, and deploys it. CI uses only a generated synthetic database. There is no Fly volume and production never imports or mutates data.
+## Local production inputs
 
-## One-time manual setup checklist
+Run `CTA_ASSETS_VERSION=<immutable-version> ./scripts/prepare-release.sh` after producing and reviewing the public database and application-ready assets. It creates this ignored tree:
 
-### GitHub
+```text
+local-release/
+├── data/
+│   ├── cta.sqlite
+│   └── import-manifest.json
+└── assets/
+    ├── heroes/<assets-version>/<hero-id>.png
+    └── ui-icons/<assets-version>/
+        ├── jobs/<job-id>.png
+        └── elements/<element-id>.png
+```
 
-- Create/select the repository; decide public versus private after reviewing all history and reports.
-- Enable Actions, review Actions permissions, and optionally protect `main` with the three CI jobs required.
-- Create a `production` environment with required reviewers for manual Fly deployment.
-- If using the optional workflow, add environment secret `FLY_API_TOKEN`, scoped to the target app. Do not expose it to pull requests.
-- Review logs/artifacts for sensitive paths. These workflows upload no generic artifacts.
+Defaults are `SOURCE_DATABASE=extracted/cta.sqlite`, `HERO_ASSET_SOURCE=local/proprietary/hero-icons`, and `UI_ASSET_SOURCE=local/proprietary/ui-icons`; each can be overridden. `local-release/` is ignored by Git but deliberately included in the Docker context. Do not put secrets there. Production builds validate the database and non-empty asset directories before Docker runs and again inside the build.
 
-### Fly.io
+## Build modes and verification
 
-- Create an account and organization; install and authenticate `flyctl`.
-- Choose a globally unique app name and replace the placeholder in `fly.toml`.
-- Confirm `arn` (Stockholm) is available or choose a nearby region; run `fly apps create <name> --org <org>`.
-- Authenticate Docker to Fly's registry, tag/push the locally approved image, and deploy that exact immutable tag.
-- Set `AllowedOrigins__0=https://<frontend-domain>` as a Fly secret/runtime variable. Add further indexed origins only when required.
-- Optionally configure an API custom domain and DNS. Verify TLS, `/health`, `/ready`, `/api/meta`, suspend/auto-start, zero minimum Machines, one shared CPU, 512 MB, and actual billing.
+Synthetic CI requires no private input:
 
-There is deliberately no volume. Adjust region, `shared-cpu-1x`, 512 MB, suspend behavior, zero minimum, or `/health` in `fly.toml` only after observing production needs.
+```bash
+./scripts/verify.sh
+docker build --target runtime --build-arg RELEASE_MODE=synthetic -t cta:synthetic .
+RELEASE_IMAGE=cta:synthetic ./scripts/smoke-test-image.sh
+```
 
-### Cloudflare Pages
+The Docker preparation stage generates a minimal synthetic public-schema database and placeholder PNGs. CI tests the generator, frontend, backend, unified image, and running container without secrets.
 
-- Create an account and Pages project, connect GitHub, and select `web/cta-web` as root.
-- Use `npm ci && npm run build`; output directory is `dist`.
-- Set public build variables `VITE_API_URL=https://<api-domain>`, optional `VITE_ASSET_BASE_URL=https://<asset-domain>`, and `VITE_SHOW_FAN_DISCLAIMER=true`.
-- Add a custom frontend domain, verify TLS, the `_redirects` SPA fallback, direct loads of `/heroes`, `/heroes/<id>`, `/team-planner`, and `/tier-list`, and cache headers. `index.html` is not immutable; hashed `/assets/*` files are.
+Production preparation and exact-image testing:
 
-Cloudflare Pages Git integration is preferred; no Cloudflare token is needed in GitHub. GitHub Pages is possible but history routing needs a 404-copy workaround or hash routing and a repository base path; it is not the documented primary target.
+```bash
+export CTA_ASSETS_VERSION=YYYY-MM-DD
+export RELEASE_IMAGE=registry.fly.io/<app>:YYYY-MM-DD-<git-sha>
+export VCS_REF=<git-sha>
+./scripts/prepare-release.sh
+./scripts/release-local.sh
+./scripts/inspect-production-image.sh "$RELEASE_IMAGE"
+```
 
-### Cloudflare R2 and DNS
+Individual verification commands:
 
-- Create an R2 bucket and decide whether reviewed portraits will be public through a custom domain.
-- Create a bucket-scoped upload token, never an account-wide token; keep credentials outside Git.
-- Configure the asset domain, cache headers, optional lifecycle rules, and CORS only if browser/canvas access requires it.
-- Upload only reviewed versioned paths such as `heroes/2026-08-06/<stable-id>.webp`; never overwrite prior versions or upload raw packages.
-- Configure frontend, API, and asset DNS names; verify HTTPS. Update API CORS and rebuild the frontend with final public origins.
+```bash
+npm ci --prefix web/cta-web
+npm test --prefix web/cta-web
+npm run build --prefix web/cta-web
+dotnet test api/Cta.Api.Tests/Cta.Api.Tests.csproj --configuration Release
+dotnet publish api/Cta.Api/Cta.Api.csproj --configuration Release --output /tmp/cta-publish
+./scripts/build-production-image.sh
+RELEASE_IMAGE="$RELEASE_IMAGE" ./scripts/smoke-test-image.sh
+PORT=8080 RELEASE_IMAGE="$RELEASE_IMAGE" ./scripts/run-release-image.sh
+curl -f http://localhost:8080/
+curl -f 'http://localhost:8080/api/heroes?pageSize=1'
+curl -f "http://localhost:8080/assets/heroes/$CTA_ASSETS_VERSION/<hero-id>.png"
+curl -f "http://localhost:8080/assets/ui-icons/$CTA_ASSETS_VERSION/jobs/brawler.png"
+```
 
-### Local machine
+The local runner uses a read-only container filesystem and temporary `/tmp`. The smoke test verifies health/readiness, API/database reads, `/`, a direct SPA route, a portrait, UI icons, missing-asset/API 404s, and absence of raw private paths.
 
-- Install Docker, Fly CLI, .NET 10 SDK, Node 24, Python 3.11+, SQLite support, and an R2-compatible uploader (`aws` CLI is used by the supplied script).
-- Authenticate CLIs outside the repository. Keep extraction and proprietary inputs under ignored `samples/`, `extracted/`, and `local/proprietary/` paths.
-- Copy `.env.example` values into an ignored shell/environment configuration. Never place secrets in frontend variables.
-- Manually review the first public database and every portrait set before publication.
+## Manual Pattern C deployment
 
-## Configuration
+1. Prepare and review local production data/assets.
+2. Run all verification.
+3. Build one immutable production image.
+4. Run and test that exact tag locally.
+5. Authenticate outside the repository: `flyctl auth docker`.
+6. Push the exact tag: `docker push "$RELEASE_IMAGE"`.
+7. Deploy it: `FLY_APP_NAME=<app> FLY_IMAGE_REF="$RELEASE_IMAGE" ./scripts/deploy-fly-image.sh --execute`.
+8. Verify `/`, direct SPA routes, `/health`, `/ready`, `/api/meta`, `/api/heroes`, and representative assets on Fly.
 
-Backend variables use the existing flat .NET keys: `Database`, `GameId`, `AllowedOrigins__0`, `ApplicationVersion`, `Commit`, `DataImportId`, `GameVersion`, `DatabaseHash`, `AssetsVersion`, `PortraitMode`, and `PortraitPathTemplate`. Docker fixes `Database=/app/data/cta.sqlite`; production startup fails if it is missing/unreadable. Use portrait mode `external` for versioned hosted paths, `local` for API-served development PNGs, or `none` for placeholders only. `ASPNETCORE_URLS` is port 8080. `/health` checks the process; `/ready` opens SQLite read-only; `/api/meta` exposes only supplied non-sensitive release values.
+Steps 5–7 are intentionally manual. `fly.toml` has no hard-coded app name. The retained manual GitHub Fly workflow deploys only a caller-supplied, previously approved image.
 
-Frontend `VITE_*` variables are public in JavaScript and must never contain secrets. `VITE_API_URL` is required in production. `VITE_ASSET_BASE_URL` moves API-provided relative portrait paths to an external origin; if unset, portraits use the API origin, and failed/missing portraits become text placeholders. Setting no portrait references in public data supports a portrait-free site.
+Rollback means redeploying a previous immutable tag or digest. Code, frontend, database, and assets roll back together.
 
-CORS limits browser origins; it is not authentication and cannot make a public catalogue API private. Development defaults only to `http://localhost:5173`; production requires explicit origins. Forwarded headers are accepted for Fly's proxy, production errors are generic, console logs are structured JSON, and normal host shutdown is graceful.
+## Caching and security
 
-## CI and normal deployments
+Versioned `/assets/*` (including Vite hashed files) receive one-year immutable caching; `index.html` and SPA fallbacks receive `no-cache`. Missing `/assets/*` and `/api/*` return 404. Directory browsing and uploads are not enabled. Forwarded headers, generic production errors, security headers, a non-root user, and read-only SQLite are preserved. Same-origin hosting removes production CORS configuration. Vite's existing production default emits no source maps. The runtime contains neither Node nor the .NET SDK.
 
-Pull requests and pushes to `main` run importer/backend tests, frontend tests/build, and a production container smoke test using generated synthetic data. Workflows have read-only permissions, no `pull_request_target`, no secrets, no production artifacts, and no deployments.
+## Cloudflare retirement
 
-Cloudflare Pages Git integration deploys reviewed frontend commits. Backend code changes require a new locally built image because the approved database must be included. The optional manual `deploy-fly-image.yml` accepts an already-pushed image reference, runs only from `main`, and should be protected by the production environment. It never builds/extracts data.
-
-## Local data release
-
-1. Perform BlueStacks extraction using the documented Windows PowerShell and `HD-Adb.exe` process; never Linux adb or hosted runners.
-2. Import locally into `extracted/cta.sqlite` using the README command.
-3. Run `./scripts/prepare-public-release.sh extracted/cta.sqlite`. It copies the DB, redacts local roots/source records, removes artifacts/diagnostics, vacuums it, writes a hash manifest, and runs allow-list validation.
-4. Manually inspect `artifacts/public/cta.sqlite` and any selected portraits. The sanitizer is a technical safeguard, not a content/legal approval.
-5. Put approved optimized/versioned portrait output under ignored `local/proprietary/public-assets/heroes/<assets-version>/`; create an asset manifest mapping stable IDs to paths.
-6. Run `./scripts/release-local.sh`. This performs sanitization, all tests, image build, container readiness/API smoke tests, private-path inspection, and hashes. It performs no remote action.
-7. Tag the tested image immutably, authenticate Docker to Fly, and push it to `registry.fly.io/<app>:<release>`.
-8. Preview asset publication with `R2_DESTINATION=... R2_ENDPOINT_URL=... ./scripts/publish-assets.sh`; use `--execute` only after review and type the confirmation.
-9. Preview Fly deployment with `FLY_APP_NAME=... FLY_IMAGE_REF=... ./scripts/deploy-fly-image.sh`; use `--execute` and type the confirmation.
-10. Verify public `/health`, `/ready`, `/api/meta`, a hero query, frontend direct routes, portraits/placeholders, and expected data/assets versions.
-
-`scripts/inspect-production-image.sh <tag>` lists `/app`; `smoke-test-image.sh` also exports the container and rejects obvious private directories. Remote actions are deliberately separate and confirmation-gated.
-
-Local image builds use an empty temporary Docker configuration because they pull only public base images. This also avoids WSL failures caused by an unavailable `docker-credential-desktop.exe`. Set `CTA_USE_DOCKER_CONFIG=1` only if the build genuinely needs the caller's normal Docker authentication; pushing remains a separate manual operation.
-
-## Public artifact validation
-
-`validate-public-artifacts.sh` requires the exact `artifacts/public/cta.sqlite`, permits only named JSON manifests at the root and PNG/WebP/AVIF files under `portraits/`, rejects symlinks, unexpected files/formats, images over 5 MiB, a DB over 250 MiB, unexpected SQLite tables, failed `quick_check`, missing API tables, and obvious home paths/credential-like strings. It does not determine copyright status, verify factual accuracy, detect every secret, or decide whether names/text/art are appropriate to publish. Manual row/schema/content and visual review remains mandatory.
-
-## Rollback
-
-- **Backend:** identify a prior immutable Fly registry tag, run `flyctl deploy --app <app> --image <exact-tag>`, then verify `/health`, `/ready`, `/api/meta`, and the expected database hash/import version.
-- **Frontend:** roll back in Pages deployment history or redeploy a known commit; check API compatibility and direct routes.
-- **Assets:** retain versioned paths, restore the prior manifest/frontend asset version, and never rely on immediate CDN invalidation. Do not overwrite old release directories.
-
-## Troubleshooting and cost controls
-
-- Startup `Required SQLite database...`: prepare the artifact, check image `/app/data/cta.sqlite`, and ensure it is readable.
-- `/ready` 503: inspect structured logs and validate SQLite locally; `/health` can remain 200 when DB readiness fails after startup.
-- Browser CORS failure: set the exact scheme/host origin and restart the API. CORS does not fix DNS/TLS.
-- Direct route 404: confirm `_redirects` is in Pages output.
-- Missing portraits: check asset base/path/CORS; fallback is intentional and supports a no-portrait deployment.
-
-Defaults minimize cost: one shared-CPU Fly Machine, 512 MB, suspend/auto-start, zero minimum, no volume/database service, static Pages, versioned R2 assets, no Workers/Functions, and no retained CI artifacts. Provider pricing and free tiers change; review both dashboards after first deployment.
-
-## Proprietary-content and fan-site review
-
-Personal or non-commercial use does not automatically grant redistribution rights, and a reachable fan site is public distribution. Names, portraits, icons, descriptions, and other game material may be protected by copyright or trademark. Limit assets to what identification/commentary needs; avoid original-resolution or complete dumps; do not imply publisher endorsement; keep a prompt takedown process; use placeholders if uncertain; and obtain legal advice if the project becomes commercial, popular, or disputed.
-
-Suggested disclaimer (not a guarantee of lawful use):
-
-> This is an unofficial fan-made project and is not affiliated with or endorsed by the game’s developer or publisher. Game names, artwork, icons, and related assets belong to their respective owners.
-
-Before launch, review current publisher terms/fan-content policies, decide whether portraits will be published, avoid monetization until rights implications are understood, and document how rights-holder removal requests are handled.
+Only after the unified Fly deployment is verified, the owner may manually remove the old Cloudflare Pages project, R2 bucket/custom asset domain, Pages/R2 DNS records, and R2 upload token. Do not remove them before replacement verification. No repository command changes Cloudflare resources.

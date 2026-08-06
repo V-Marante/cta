@@ -56,6 +56,10 @@ samples/
 # Authentic assets are preferred for local development but must never enter Git.
 local/proprietary/
 
+# Reviewed, application-ready inputs for local production image builds.
+local-release/*
+!local-release/.gitkeep
+
 # Generated inventories
 inventories/
 

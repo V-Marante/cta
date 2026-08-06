@@ -177,14 +177,15 @@ The extractor uses the same element/index mapping as the importer, validates atl
 
 The frontend includes a compact local tier-list maker at `/tier-list`. It starts with one `S` tier, loads the same collectible-only hero API, and keeps a scrollable Available portrait pool sticky in the viewport. Every tile is a compact portrait with a full-name box underneath. Up to 15 renamed tiers receive unique deterministic positional colors; colors are not user-editable. Tiers can be moved up/down after creation, with colors following their positions. Heroes are placed and moved by drag-and-drop; clicking a ranked portrait returns it to Available. Development mode includes random fill for visualization, and ranked tiers export as a lossless PNG with the same portrait/name-card layout. Authentic portraits are attempted first; failed export images use the full hero name rather than initials. Drafts use versioned browser `localStorage`; the tool never writes to the API or database.
 
-Then start the API:
+Generate the minimal ignored public catalogue database, then start the API:
 
 ```bash
-Database=extracted/cta.sqlite GameId=com.godzilab.idlerpg \
+./scripts/prepare-public-release.sh extracted/cta.sqlite
+Database=artifacts/public/cta.sqlite GameId=com.godzilab.idlerpg \
   dotnet run --project api/Cta.Api --urls http://localhost:5080
 ```
 
-Authentic compact hero portraits are served from `HeroIconRoot`, which defaults to `local/proprietary/hero-icons`. Authentic job and element icons are served from `UiIconRoot`, which defaults to `local/proprietary/ui-icons`. Both directories are ignored and must not be staged. The API exposes them only through static GET/HEAD handling and never modifies them or the importer database.
+Authentic compact hero portraits are served from `HeroIconRoot`, which defaults to `local/proprietary/hero-icons`. Authentic job and element icons are served from `UiIconRoot`, which defaults to `local/proprietary/ui-icons`. Both directories are ignored and must not be staged. The API exposes them only through static GET/HEAD handling and opens only the generated public catalogue database read-only; the comprehensive importer database remains local to extraction and release preparation.
 
 3. In another terminal, start the React application:
 
@@ -194,6 +195,6 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. The Vite development server proxies API and local-asset requests to `http://localhost:5080`, which also keeps portrait export same-origin. Set `VITE_API_URL` before `npm run dev` only when the API is hosted elsewhere; that API must allow the frontend origin for canvas export.
+Open `http://localhost:5173`. The Vite development server proxies API and asset requests to `http://localhost:5080`, matching the unified same-origin production paths. See `docs/deployment.md` for synthetic and local production image builds.
 
 The roster exposes only heroes classified as playable. It supports job, element, rarity, mobility, acquisition, and attribute filters. Cards use authentic locally extracted CTA job-indicator and element icons when present and accessible text when they are absent. The UI also falls back to names for missing portrait files, canonical names or raw IDs for missing English names, and an unavailable-description message for incomplete skill localization.

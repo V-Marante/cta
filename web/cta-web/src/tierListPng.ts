@@ -1,4 +1,4 @@
-import { API_URL } from './api'
+import { portraitUrl } from './components/Portrait'
 import type { Hero } from './models'
 import type { Tier } from './components/TierListMaker'
 
@@ -44,7 +44,7 @@ function fileName(title: string) {
 }
 
 async function loadPortraits(heroes: Hero[]) {
-  const entries = await Promise.all(heroes.map(async hero => [hero.id, hero.portraitUrl ? await loadImage(`${API_URL}${hero.portraitUrl}`) : null] as const))
+  const entries = await Promise.all(heroes.map(async hero => [hero.id, hero.portraitUrl ? await loadImage(portraitUrl(hero.portraitUrl)) : null] as const))
   return new Map(entries)
 }
 

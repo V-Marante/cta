@@ -11,7 +11,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly bool _createDatabase;
     private readonly string _environment;
     private readonly string _portraitMode;
-    public ApiFactory(string gameId = "cta", bool withUiIcon = false, bool withHeroIcon = false, bool createDatabase = true, string environment = "Development", string portraitMode = "local")
+    public ApiFactory(string gameId = "cta", bool withUiIcon = false, bool withHeroIcon = false, bool createDatabase = true, string environment = "Development", string portraitMode = "local", bool validPublicSchema = true)
     {
         _createDatabase = createDatabase;
         _environment = environment;
@@ -19,6 +19,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         Database = Path.Combine(Path.GetTempPath(), $"cta-api-{Guid.NewGuid():N}.sqlite");
         UiIconRoot = Path.Combine(Path.GetTempPath(), $"cta-api-icons-{Guid.NewGuid():N}");
         HeroIconRoot = Path.Combine(Path.GetTempPath(), $"cta-api-portraits-{Guid.NewGuid():N}");
+        WebRoot = Path.Combine(Path.GetTempPath(), $"cta-api-wwwroot-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(WebRoot, "assets", "heroes", "test-assets"));
+        File.WriteAllText(Path.Combine(WebRoot, "index.html"), "<!doctype html><title>CTA synthetic frontend</title><div id=\"root\"></div>");
+        File.WriteAllBytes(Path.Combine(WebRoot, "assets", "heroes", "test-assets", "Alpha.png"),
+            Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+3MxZ5wAAAABJRU5ErkJggg=="));
         GameId = gameId;
         if (withUiIcon)
         {
@@ -32,21 +37,26 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             File.WriteAllBytes(Path.Combine(HeroIconRoot, "Alpha.png"),
                 Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+3MxZ5wAAAABJRU5ErkJggg=="));
         }
-        if (createDatabase) CreateSchema();
+        if (createDatabase)
+        {
+            if (validPublicSchema) CreateSchema();
+            else { using var db = Open(); Execute(db, "CREATE TABLE import_runs(id TEXT PRIMARY KEY)"); }
+        }
     }
 
     public string Database { get; }
     public string GameId { get; }
     public string UiIconRoot { get; }
     public string HeroIconRoot { get; }
+    public string WebRoot { get; }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(_environment);
+        builder.UseWebRoot(WebRoot);
         builder.ConfigureAppConfiguration((_, config) =>
         config.AddInMemoryCollection(new Dictionary<string, string?> { ["Database"] = Database, ["GameId"] = GameId,
             ["HeroIconRoot"] = HeroIconRoot, ["UiIconRoot"] = UiIconRoot,
-            ["AllowedOrigins:0"] = "https://frontend.example.test",
             ["ApplicationVersion"] = "test-version", ["Commit"] = "abcdef1",
             ["DataImportId"] = "test-import", ["GameVersion"] = "test-game",
             ["DatabaseHash"] = "sha256:test", ["AssetsVersion"] = "test-assets",
@@ -56,7 +66,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public void Seed(string importId, string gameId, string finishedAt, params HeroSeed[] heroes)
     {
         using var db = Open();
-        Execute(db, "INSERT INTO import_runs(id,game_id,status,finished_at) VALUES($id,$game,'succeeded',$finished)", ("$id", importId), ("$game", gameId), ("$finished", finishedAt));
+        Execute(db, "INSERT INTO release_info(id,game_id,game_version,finished_at) VALUES($id,$game,'test',$finished)", ("$id", importId), ("$game", gameId), ("$finished", finishedAt));
         foreach (var hero in heroes)
         {
             var payload = JsonSerializer.Serialize(new { canonical_name = hero.Name, @class = hero.Class, tribe = hero.Tribe,
@@ -74,7 +84,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 Entity(db, importId, "acquisition_source", hero.Acquisition, $$"""{"source_id":"{{hero.Acquisition}}","kind":"chest"}""");
                 Localize(db, importId, "acquisition_source", hero.Acquisition, "name", hero.Acquisition);
-                Execute(db, "INSERT INTO relations(import_id,relation,source_key,target_key,ordinal,payload_json) VALUES($i,'hero_acquisition',$h,$a,0,'{\"current\":true,\"medal_id\":\"Medal_Test\"}')", ("$i", importId), ("$h", hero.Id), ("$a", hero.Acquisition));
+                Execute(db, "INSERT INTO catalog_relations(release_id,kind,source_id,target_id,ordinal,payload_json) VALUES($i,'hero_acquisition',$h,$a,0,'{\"current\":true,\"medal_id\":\"Medal_Test\"}')", ("$i", importId), ("$h", hero.Id), ("$a", hero.Acquisition));
             }
         }
     }
@@ -84,7 +94,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         using var db = Open();
         Entity(db, importId, "skill", "TestSkill", "{\"canonical_name\":\"Fallback Skill\",\"type\":\"damage\",\"attributes\":{},\"components\":[{\"kind\":\"info\",\"attributes\":{},\"attribute_semantics\":{},\"text\":\"SkDesc_Test\"},{\"kind\":\"spec\",\"attributes\":{\"time\":\"5\",\"cooldown\":\"0\"},\"attribute_semantics\":{\"cooldown\":{\"raw_value\":\"0\",\"value\":0,\"display_value\":0,\"status\":\"strongly_supported\",\"meaning\":\"duration\",\"unit\":\"seconds\",\"source_attribute\":\"cooldown\"}},\"text\":null}]}");
         Localize(db, importId, "skill_description", "Test", "description", "Works for {duration}.");
-        Execute(db, "INSERT INTO relations(import_id,relation,source_key,target_key,ordinal,payload_json) VALUES($i,'character_skill',$h,'TestSkill',0,'{\"kind\":\"skill\"}')", ("$i", importId), ("$h", heroId));
+        Execute(db, "INSERT INTO catalog_relations(release_id,kind,source_id,target_id,ordinal,payload_json) VALUES($i,'character_skill',$h,'TestSkill',0,'{\"kind\":\"skill\"}')", ("$i", importId), ("$h", heroId));
     }
 
     public void SeedPortraitReference(string importId, string heroId)
@@ -97,18 +107,18 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     {
         using var db = Open();
         Execute(db, """
-          CREATE TABLE import_runs(id TEXT PRIMARY KEY,game_id TEXT,status TEXT,finished_at TEXT);
-          CREATE TABLE entities(import_id TEXT,namespace TEXT,entity_key TEXT,payload_json TEXT);
-          CREATE TABLE localizations(import_id TEXT,namespace TEXT,entity_key TEXT,locale TEXT,field TEXT,value TEXT);
-          CREATE TABLE relations(import_id TEXT,relation TEXT,source_key TEXT,target_key TEXT,ordinal INTEGER,payload_json TEXT,source_path TEXT,source_record TEXT);
+          CREATE TABLE release_info(id TEXT PRIMARY KEY,game_id TEXT,game_version TEXT,finished_at TEXT);
+          CREATE TABLE catalog_entities(release_id TEXT,kind TEXT,entity_id TEXT,payload_json TEXT);
+          CREATE TABLE catalog_text(release_id TEXT,kind TEXT,entity_id TEXT,locale TEXT,field TEXT,value TEXT);
+          CREATE TABLE catalog_relations(release_id TEXT,kind TEXT,source_id TEXT,target_id TEXT,ordinal INTEGER,payload_json TEXT);
           """);
     }
     private SqliteConnection Open() { var db = new SqliteConnection($"Data Source={Database}"); db.Open(); return db; }
-    private static void Entity(SqliteConnection db, string importId, string ns, string key, string json) => Execute(db, "INSERT INTO entities VALUES($i,$n,$k,$j)", ("$i", importId), ("$n", ns), ("$k", key), ("$j", json));
-    private static void Localize(SqliteConnection db, string importId, string ns, string key, string field, string value) => Execute(db, "INSERT INTO localizations VALUES($i,$n,$k,'en',$f,$v)", ("$i", importId), ("$n", ns), ("$k", key), ("$f", field), ("$v", value));
+    private static void Entity(SqliteConnection db, string importId, string ns, string key, string json) => Execute(db, "INSERT INTO catalog_entities VALUES($i,$n,$k,$j)", ("$i", importId), ("$n", ns), ("$k", key), ("$j", json));
+    private static void Localize(SqliteConnection db, string importId, string ns, string key, string field, string value) => Execute(db, "INSERT INTO catalog_text VALUES($i,$n,$k,'en',$f,$v)", ("$i", importId), ("$n", ns), ("$k", key), ("$f", field), ("$v", value));
     private static void Execute(SqliteConnection db, string sql, params (string, object)[] values) { using var command = db.CreateCommand(); command.CommandText = sql; foreach (var (name, value) in values) command.Parameters.AddWithValue(name, value); command.ExecuteNonQuery(); }
 
-    protected override void Dispose(bool disposing) { base.Dispose(disposing); if (File.Exists(Database)) File.Delete(Database); if (Directory.Exists(UiIconRoot)) Directory.Delete(UiIconRoot, true); if (Directory.Exists(HeroIconRoot)) Directory.Delete(HeroIconRoot, true); }
+    protected override void Dispose(bool disposing) { base.Dispose(disposing); if (File.Exists(Database)) File.Delete(Database); if (Directory.Exists(UiIconRoot)) Directory.Delete(UiIconRoot, true); if (Directory.Exists(HeroIconRoot)) Directory.Delete(HeroIconRoot, true); if (Directory.Exists(WebRoot)) Directory.Delete(WebRoot, true); }
 }
 
 public sealed record HeroSeed(string Id, string Name, string Class = "Ranger", string Tribe = "Human", string Element = "Fire",

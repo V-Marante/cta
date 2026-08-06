@@ -17,6 +17,8 @@ samples
 assets
 extracted
 local
+# local-release is intentionally kept in the Docker context. It is ignored by
+# Git and validated by production builds; synthetic builds use only placeholders.
 inventories
 reports/generated
 *.apk
@@ -31,6 +33,7 @@ reports/generated
 *.sqlite3
 *.db
 !artifacts/public/cta.sqlite
+!local-release/data/cta.sqlite
 credentials*
 secrets*
 *.pem

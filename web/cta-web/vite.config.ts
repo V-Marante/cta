@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: Object.fromEntries(['/api', '/health', '/portraits', '/ui-icons'].map(path => [path, apiTarget])),
+    proxy: Object.fromEntries(['/api', '/health', '/ready', '/assets', '/portraits', '/ui-icons'].map(path => [path, apiTarget])),
   },
   test: { environment: 'jsdom', setupFiles: './src/test/setup.ts' },
 })
