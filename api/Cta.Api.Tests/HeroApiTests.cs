@@ -184,6 +184,15 @@ public sealed class HeroApiTests
     }
 
     [Fact]
+    public async Task Bundled_portrait_mode_uses_packaged_file_even_without_database_portrait_marker()
+    {
+        using var factory = new ApiFactory("cta", portraitMode: "bundled");
+        factory.Seed("current", "cta", "2026-02-01", new HeroSeed("Alpha", "Alpha Hero"));
+        var hero = (await Get(factory.CreateClient(), "/api/heroes/Alpha")).GetProperty("hero");
+        Assert.Equal("/assets/heroes/test-assets/Alpha.png", hero.GetProperty("portraitUrl").GetString());
+    }
+
+    [Fact]
     public async Task Non_playable_classifications_are_omitted_from_all_hero_endpoints()
     {
         using var factory = new ApiFactory("cta");
