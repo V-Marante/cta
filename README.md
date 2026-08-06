@@ -62,6 +62,8 @@ Hero HTTP contract: `docs/hero-api-contract.md`
 
 Production deployment and local data releases: `docs/deployment.md`
 
+Routine step-by-step release procedures by change type: `docs/release-runbook.md`
+
 Current release-readiness evidence: `reports/24-hero-library-release-readiness.md`
 
 ## Repository Data Boundary

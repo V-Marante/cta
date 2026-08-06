@@ -8,8 +8,9 @@ from pathlib import Path
 
 ALLOWED_ROOT_FILES = {"cta.sqlite", "import-manifest.json", "asset-manifest.json"}
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".webp", ".avif"}
-EXPECTED_TABLES = {"import_runs", "parser_executions", "artifacts", "entities", "relations", "localizations", "diagnostics", "sqlite_sequence"}
+EXPECTED_TABLES = {"schema_migrations", "import_runs", "parser_executions", "artifacts", "entities", "relations", "localizations", "diagnostics", "sqlite_sequence"}
 ALLOWED_COLUMNS = {
+    "schema_migrations": {"version", "checksum", "applied_at"},
     "import_runs": {"id", "game_id", "game_version", "build", "content_version", "source_digest", "parser_set_digest", "source_root", "status", "started_at", "finished_at", "version_metadata_json", "error_message"},
     "parser_executions": {"import_id", "artifact_path", "parser_id", "parser_version", "output_schema_version", "status", "entity_count", "relation_count", "localization_count"},
     "artifacts": {"import_id", "relative_path", "byte_size", "sha256", "media_type", "parser_id"},

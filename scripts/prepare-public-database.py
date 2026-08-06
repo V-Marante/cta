@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Create a sanitized public SQLite copy without local extraction provenance."""
 import argparse
-import shutil
 import sqlite3
 from pathlib import Path
 
@@ -14,10 +13,16 @@ def main() -> int:
     if not args.source.is_file():
         parser.error(f"source database does not exist: {args.source}")
     args.destination.parent.mkdir(parents=True, exist_ok=True)
-    if args.destination.exists():
-        args.destination.unlink()
-    shutil.copyfile(args.source, args.destination)
+    for generated in (args.destination, Path(f"{args.destination}-shm"), Path(f"{args.destination}-wal")):
+        if generated.exists():
+            generated.unlink()
+    # SQLite's backup API creates a consistent snapshot even when the local
+    # importer database uses WAL; a plain file copy can omit live WAL pages.
+    with sqlite3.connect(f"{args.source.resolve().as_uri()}?mode=ro", uri=True) as source:
+        with sqlite3.connect(args.destination) as destination:
+            source.backup(destination)
     with sqlite3.connect(args.destination) as db:
+        db.execute("PRAGMA journal_mode=DELETE")
         db.execute("PRAGMA foreign_keys=ON")
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         required = {"import_runs", "entities", "relations", "localizations"}
@@ -32,6 +37,7 @@ def main() -> int:
             db.execute("UPDATE parser_executions SET artifact_path='[redacted]' || rowid")
         if "diagnostics" in tables:
             db.execute("DELETE FROM diagnostics")
+        db.commit()
         db.execute("VACUUM")
     args.destination.chmod(0o444)
     print(f"sanitized public database: {args.destination}")

@@ -1,5 +1,7 @@
 # Deployment and data-release guide
 
+For routine releases after setup, follow the copy/paste [release runbook](release-runbook.md). It separates frontend-only, backend/container, Fly configuration, new SQLite extraction, asset, and mixed releases.
+
 ## Architecture and trust boundary
 
 The frontend is a static Vite build for Cloudflare Pages. The public API runs on one auto-stopping Fly Machine. Its read-only SQLite file is copied into the image, so image and data are one immutable release. Versioned portraits are published separately to R2 (or another static host). Team Planner state remains in browser `localStorage`.
@@ -79,6 +81,8 @@ Cloudflare Pages Git integration deploys reviewed frontend commits. Backend code
 10. Verify public `/health`, `/ready`, `/api/meta`, a hero query, frontend direct routes, portraits/placeholders, and expected data/assets versions.
 
 `scripts/inspect-production-image.sh <tag>` lists `/app`; `smoke-test-image.sh` also exports the container and rejects obvious private directories. Remote actions are deliberately separate and confirmation-gated.
+
+Local image builds use an empty temporary Docker configuration because they pull only public base images. This also avoids WSL failures caused by an unavailable `docker-credential-desktop.exe`. Set `CTA_USE_DOCKER_CONFIG=1` only if the build genuinely needs the caller's normal Docker authentication; pushing remains a separate manual operation.
 
 ## Public artifact validation
 

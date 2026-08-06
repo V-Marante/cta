@@ -1,6 +1,14 @@
-# Replace this placeholder after `fly apps create <globally-unique-name>`.
-app = "replace-with-your-fly-app-name"
+app = "rgc-cta-api"
 primary_region = "arn"
+
+[checks.ready]
+grace_period = "10s"
+interval = "30s"
+method = "GET"
+path = "/ready"
+port = 8_080
+timeout = "5s"
+type = "http"
 
 [build]
   dockerfile = "Dockerfile"
@@ -13,7 +21,7 @@ primary_region = "arn"
   internal_port = 8080
   force_https = true
   auto_start_machines = true
-  auto_stop_machines = "suspend"
+  auto_stop_machines = true
   min_machines_running = 0
   processes = ["app"]
 
@@ -25,5 +33,6 @@ primary_region = "arn"
     path = "/health"
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "256mb"
