@@ -153,7 +153,7 @@ PYTHONPATH=src python3 -m cta_importer init-db extracted/imports.sqlite
 PYTHONPATH=src python3 -m cta_importer list-parsers
 ```
 
-Once game-specific parser plugins exist:
+The in-tree CTA parser package is registered by the CLI; external parser plugins can still use the entry-point contract:
 
 ```bash
 PYTHONPATH=src python3 -m cta_importer import \
@@ -164,4 +164,4 @@ PYTHONPATH=src python3 -m cta_importer import \
   --build 200821
 ```
 
-No game-specific parser is included yet, by design.
+CTA-specific concepts remain under `cta_importer.cta`; the generic kernel does not encode them.

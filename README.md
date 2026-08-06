@@ -74,11 +74,13 @@ Initialize the importer database:
 PYTHONPATH=src python3 -m cta_importer init-db extracted/imports.sqlite
 ```
 
-Run the core tests:
+Run the complete reproducible verification workflow:
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests -v
+./scripts/verify.sh
 ```
+
+This runs the Python importer tests, restores/builds/tests the .NET API, performs `npm ci`, runs the frontend tests, and creates a frontend production build. It does not read or generate extracted game data.
 
 ## Hero library local development
 
@@ -99,7 +101,7 @@ Warnings for incomplete localization, unresolved legacy skills, or missing portr
 2. Start the read-only ASP.NET Core API from the repository root:
 
 ```bash
-Database=extracted/cta.sqlite \
+Database=extracted/cta.sqlite GameId=com.godzilab.idlerpg \
   dotnet run --project api/Cta.Api --urls http://localhost:5080
 ```
 
@@ -109,7 +111,7 @@ The large `HP_<hero>` presentation artwork is deliberately ignored. The collecti
 
 ```bash
 cd web/cta-web
-npm install
+npm ci
 npm run dev
 ```
 

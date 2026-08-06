@@ -1,0 +1,11 @@
+export type Stats = Record<string, string | number | null>
+export type Trait = { code: string; name: string; description?: string }
+export type Acquisition = { id: string; name: string; kind: string; medalId?: string; current: boolean }
+export type Hero = { id: string; name: string; class?: string; tribe?: string; element?: string; damageType?: string; sex?: string; mobility?: string; portraitUrl?: string; stats: Stats; traits: Trait[]; passive: Record<string, string | number | null>; progression: Record<string, string | number | null>; availability: Record<string, boolean | null>; acquisition: Acquisition[]; classification: string; variantOf?: string }
+export type SkillPart = { kind: string; attributes: Record<string, string>; text?: string }
+export type Skill = { id: string; name: string; description?: string; type?: string; components: SkillPart[]; raw?: Record<string, string> }
+export type FilterOption = { value: string; label: string }
+export type Filters = { classes: string[]; tribes: string[]; elements: string[]; damageTypes: string[]; rarities: string[]; mobilities: string[]; acquisitions: string[]; attributes: FilterOption[] }
+export type HeroPage = { items: Hero[]; total: number; page: number; pageSize: number }
+export type HeroDetailModel = { hero: Hero; skills: Skill[] }
+export type HeroQuery = { search: string; heroClass: string; element: string; rarity: string; mobility: string; acquisition: string; attribute: string; includeVariants: boolean }

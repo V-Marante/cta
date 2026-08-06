@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from cta_importer.cta import HeroLibraryValidator, cta_parsers
+from cta_importer.cta.heroes import passive
 from cta_importer.engine import ImportEngine, ImportRequest
 from cta_importer.model import Severity, VersionInfo
 from cta_importer.persistence import SQLiteRepository
@@ -111,6 +112,25 @@ class CtaHeroImportTests(unittest.TestCase):
         self.assertEqual("1.3.0", versions["cta.localization.en"])
         self.assertEqual("1.3.0", versions["cta.characters"])
         self.assertEqual("1.1.0", versions["cta.hero_acquisition"])
+
+    def test_focused_passive_mapping_preserves_source_value(self) -> None:
+        self.assertEqual({
+            "code": "BuffHP", "target": "All", "source_value": 12.5,
+            "name": "Buff HP", "description": "All team: +12.5% HP",
+        }, passive("BuffHP", "All", "12.5"))
+
+    def test_suffix_variant_classification_is_deterministic(self) -> None:
+        lines = HEROES.splitlines()
+        clone = lines[1].replace("Ada,Ada,", "Ada Clone,AdaClone,")
+        (self.source / "Heroes.csv").write_text("\n".join((*lines, clone)) + "\n", encoding="utf-8")
+        result = ImportEngine(self.repository, ParserRegistry(cta_parsers()), ValidatorRegistry([HeroLibraryValidator()])).import_source(
+            ImportRequest(self.source, VersionInfo("cta", "variant"))
+        )
+        classification = self.repository.connection.execute(
+            "SELECT payload_json FROM entities WHERE import_id=? AND namespace='hero_classification' AND entity_key='AdaClone'", (result.import_id,)
+        ).fetchone()[0]
+        self.assertIn('"kind":"summoned_variant"', classification)
+        self.assertIn('"owner_id":"Ada"', classification)
 
     def test_duplicate_hero_ids_are_rejected(self) -> None:
         with (self.source / "Heroes.csv").open("a", encoding="utf-8") as stream:
