@@ -57,3 +57,10 @@ summary { cursor: pointer; color: #d6e0e8; }
   padding: 1.5rem;
   font-size: clamp(1rem, 3vw, 2rem);
 }
+
+.hero-symbols { display: flex; align-items: center; gap: 7px; min-height: 28px; }
+.hero-symbols i { color: #65758b; font-style: normal; }
+.hero-symbol { display: inline-grid; place-items: center; width: 30px; height: 30px; color: #dce6ef; }
+.hero-symbol img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.symbol-fallback { width: max-content; max-width: 7rem; font-size: 0.65rem; line-height: 1; }
+.hero-symbol:has(.symbol-fallback) { width: auto; min-width: 30px; }

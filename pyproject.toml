@@ -9,6 +9,9 @@ description = "Versioned, plugin-based game data import infrastructure"
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+assets = ["texture2ddecoder==1.0.6"]
+
 [project.scripts]
 cta-import = "cta_importer.cli:main"
 

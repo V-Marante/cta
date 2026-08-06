@@ -13,20 +13,25 @@ class HeroLibraryValidator:
     def validate(self, dataset: ImportDataset) -> tuple[Diagnostic, ...]:
         diagnostics: list[Diagnostic] = []
         heroes = [item for item in dataset.entities if item.namespace == "hero"]
-        skills = {item.key for item in dataset.entities if item.namespace == "skill"}
-        portraits = {item.key for item in dataset.entities if item.namespace == "portrait"}
-        localized = {(item.namespace, item.key, item.field) for item in dataset.localizations if item.locale == "en"}
+        skills = {item.key.lower() for item in dataset.entities if item.namespace == "skill"}
+        portraits = {item.key.lower(): item for item in dataset.entities if item.namespace == "portrait"}
+        localized = {(item.namespace, item.key.lower(), item.field) for item in dataset.localizations if item.locale == "en"}
         for key, count in Counter(item.key for item in heroes).items():
             if count > 1:
                 diagnostics.append(Diagnostic(Severity.ERROR, "duplicate_hero_id", f"duplicate hero ID {key} ({count} records)"))
         for hero in heroes:
-            if ("hero", hero.key, "name") not in localized:
+            if ("hero", hero.key.lower(), "name") not in localized:
                 diagnostics.append(Diagnostic(Severity.WARNING, "missing_localization_key", f"hero {hero.key} has no English name", location=hero.source))
-            if hero.key not in portraits:
+            portrait = portraits.get(hero.key.lower())
+            if portrait is None:
                 diagnostics.append(Diagnostic(Severity.WARNING, "missing_portrait_reference", f"hero {hero.key} has no portrait reference", location=hero.source))
+            elif not portrait.payload.get("frame_name"):
+                code = "invalid_compact_portrait_reference" if portrait.payload.get("icon_index") is not None else "missing_compact_portrait_reference"
+                diagnostics.append(Diagnostic(Severity.WARNING, code, f"hero {hero.key} has no resolvable compact GMI portrait", location=portrait.source,
+                    details={"element": portrait.payload.get("element"), "icon_index": portrait.payload.get("icon_index")}))
         for relation in dataset.relations:
-            if relation.relation == "character_skill" and relation.target_key not in skills:
+            if relation.relation == "character_skill" and relation.target_key.lower() not in skills:
                 diagnostics.append(Diagnostic(Severity.WARNING, "unresolved_skill_reference", f"skill reference does not resolve: {relation.target_key}", location=relation.source))
-            elif relation.relation == "character_skill" and ("skill", relation.target_key, "name") not in localized:
+            elif relation.relation == "character_skill" and ("skill", relation.target_key.lower(), "name") not in localized:
                 diagnostics.append(Diagnostic(Severity.WARNING, "missing_localization_key", f"skill {relation.target_key} has no English name", location=relation.source))
         return tuple(diagnostics)

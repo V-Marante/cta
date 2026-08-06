@@ -1,5 +1,7 @@
 # Phase 10: Next Extraction Plan
 
+> **Superseded — do not follow this extraction plan.** BlueStacks successfully provided ADB package retrieval and is now the required Android route for this repository. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Prioritized Candidates
 
 | Priority | Source | Format | Confirmed/Inferred Content | Parser Needed | Link Names/Stats/Images | Complexity | Confidence | Automation |

@@ -53,12 +53,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("database", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--game-id", default="com.godzilab.idlerpg")
     args = parser.parse_args()
 
     db = sqlite3.connect(args.database)
     run = db.execute(
         "SELECT id, game_version, finished_at FROM import_runs "
-        "WHERE status='succeeded' ORDER BY finished_at DESC LIMIT 1"
+        "WHERE status='succeeded' AND game_id=? ORDER BY finished_at DESC LIMIT 1",
+        (args.game_id,),
     ).fetchone()
     if run is None:
         raise SystemExit("no successful import found")
@@ -68,6 +70,9 @@ def main() -> int:
     classifications = payloads(db, import_id, "hero_classification")
     characters = payloads(db, import_id, "character")
     skills = payloads(db, import_id, "skill")
+    characters_by_lower = {key.lower(): value for key, value in characters.items()}
+    skills_by_lower = {key.lower(): value for key, value in skills.items()}
+    classification_counts = Counter(value.get("kind", "unclassified") for value in classifications.values())
     collectible_ids = sorted(
         hero_id
         for hero_id in heroes
@@ -75,7 +80,7 @@ def main() -> int:
     )
 
     localized_hero_names = {
-        key
+        key.lower()
         for (key,) in db.execute(
             "SELECT entity_key FROM localizations WHERE import_id=? AND namespace='hero' "
             "AND locale='en' AND field='name' AND trim(value)<>''",
@@ -83,7 +88,7 @@ def main() -> int:
         )
     }
     localized_skill_names = {
-        key
+        key.lower()
         for (key,) in db.execute(
             "SELECT entity_key FROM localizations WHERE import_id=? AND namespace='skill' "
             "AND locale='en' AND field='name' AND trim(value)<>''",
@@ -91,7 +96,7 @@ def main() -> int:
         )
     }
     localized_skill_descriptions = {
-        key
+        key.lower()
         for (key,) in db.execute(
             "SELECT entity_key FROM localizations WHERE import_id=? AND namespace='skill' "
             "AND locale='en' AND field='description' AND trim(value)<>''",
@@ -138,7 +143,7 @@ def main() -> int:
             issues.append("progression: " + ", ".join(missing_progression))
             for label in missing_progression:
                 count_by_issue[f"Missing progression: {label}"] += 1
-        if hero_id not in localized_hero_names:
+        if hero_id.lower() not in localized_hero_names:
             issues.append("localized name (canonical fallback works)")
             count_by_issue["Missing localized hero name"] += 1
         if not hero.get("traits"):
@@ -154,26 +159,27 @@ def main() -> int:
             count_by_issue["Missing acquisition/availability"] += 1
             classification_review.append(hero_id)
 
-        character = characters.get(hero_id)
-        resolved = skill_relations.get(hero_id, [])
+        character = characters_by_lower.get(hero_id.lower())
+        character_id = classifications.get(hero_id, {}).get("character_id") or hero_id
+        resolved = skill_relations.get(character_id, [])
         if character is None:
             issues.append("character/model record")
             count_by_issue["Missing character/model record"] += 1
         if len(resolved) < 3:
             issues.append(f"spells ({len(resolved)}/3 resolved)")
             count_by_issue["Fewer than three resolved spells"] += 1
-        missing_skill_names = [skill_id for skill_id in resolved if skill_id not in localized_skill_names and not skills.get(skill_id, {}).get("canonical_name")]
+        missing_skill_names = [skill_id for skill_id in resolved if skill_id.lower() not in localized_skill_names and not skills_by_lower.get(skill_id.lower(), {}).get("canonical_name")]
         if missing_skill_names:
             issues.append("spell names: " + ", ".join(missing_skill_names))
             count_by_issue["Missing spell name"] += len(missing_skill_names)
         missing_descriptions = []
         for skill_id in resolved:
-            skill = skills.get(skill_id, {})
+            skill = skills_by_lower.get(skill_id.lower(), {})
             inline = any(
                 component.get("kind") == "info" and str(component.get("text") or "").strip()
                 for component in skill.get("components", [])
             )
-            if skill_id not in localized_skill_descriptions and not inline:
+            if skill_id.lower() not in localized_skill_descriptions and not inline:
                 missing_descriptions.append(skill_id)
         if missing_descriptions:
             issues.append("spell descriptions: " + ", ".join(missing_descriptions))
@@ -206,6 +212,7 @@ def main() -> int:
         "## Summary",
         "",
         f"- Collectible heroes audited: **{len(collectible_ids)}**",
+        "- Classification counts: " + ", ".join(f"`{kind}` **{count}**" for kind, count in sorted(classification_counts.items())) + ".",
         f"- Heroes complete except for a static small icon: **{complete_except_icon}**",
         f"- Heroes with one or more additional gaps: **{len(collectible_ids) - complete_except_icon}**",
         f"- Importer warning/error diagnostics: **{warning_count}**",
@@ -226,7 +233,7 @@ def main() -> int:
         "",
         "## Classification review candidates",
         "",
-        "These records are currently classified as collectible but have no normalized acquisition relation and no enabled legacy Dungeon/Shop/Event/Epic Chest flag. Several names resemble enemies or temporary units, so they should be verified before treating the 127-record set as the player roster.",
+        "These records are currently classified as collectible but have no normalized acquisition relation and no enabled legacy Dungeon/Shop/Event/Epic Chest flag.",
         "",
         ", ".join(f"`{hero_id}`" for hero_id in classification_review) or "None.",
     ])
@@ -242,7 +249,12 @@ def main() -> int:
     for name, hero_id, resolved_count, acquisition_count, issues in rows:
         safe = lambda value: value.replace("|", "\\|").replace("\n", " ")
         lines.append(f"| {safe(name)} | `{safe(hero_id)}` | {resolved_count} | {acquisition_count} | {safe(issues)} |")
-    lines.extend(["", "## Scope notes", "", "- Only records currently classified as `collectible` are included; this classification itself is not assumed to be perfect.", "- Enemy, NPC, summoned, transformed, and cosmetic-variant records already recognized by the importer are excluded.", "- Acquisition counts use normalized relations first, then the API-compatible legacy Dungeon/Shop/Event/Epic Chest flags as fallback.", "- This report audits persisted normalized data, not values visible only in a live player account.", ""])
+    lines.extend(["", "## Non-collectible classification review", "", "| Raw ID | Kind | Confidence | Score | Reason |", "|---|---|---|---:|---|"])
+    for hero_id, classification in sorted(classifications.items()):
+        if classification.get("kind") == "collectible":
+            continue
+        lines.append(f"| `{hero_id}` | `{classification.get('kind')}` | {classification.get('confidence')} | {classification.get('score')} | {classification.get('reason')} |")
+    lines.extend(["", "## Scope notes", "", "- Per-hero completeness rows include only records classified as `collectible`; the classification summary and review cover every hero balance record.", "- Acquisition counts use normalized relations first, then the API-compatible legacy Dungeon/Shop/Event/Epic Chest flags as fallback.", "- This report audits persisted normalized data, not values visible only in a live player account.", ""])
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("\n".join(lines), encoding="utf-8")

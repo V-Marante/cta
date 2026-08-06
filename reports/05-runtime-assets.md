@@ -1,5 +1,7 @@
 # Phase 6: Runtime Assets
 
+> **Superseded.** BlueStacks exposed the package-scoped shared runtime cache and APK assets. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Timeline
 
 The user reported installation at 09:00 GMT+2 on 2026-08-05. Local evidence aligns with first-run activity shortly after that.

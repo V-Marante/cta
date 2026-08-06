@@ -1,5 +1,7 @@
 # Structured Content Schema and Importer Design
 
+> **Current design snapshot.** Counts describe BlueStacks `2.0.821`, reconfirmed as the latest version offered by the installed BlueStacks distribution on 2026-08-06, and must be revalidated after any future version refresh. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Purpose and scope
 
 This document is the technical design for importing every structured file under `samples/bluestacks/shared-data/cache/content/`. It describes formats, record shapes, identifiers, inferred relationships, cardinalities, validation rules, and implementation order. It intentionally contains no import code.

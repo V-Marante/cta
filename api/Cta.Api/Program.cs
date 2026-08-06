@@ -20,6 +20,8 @@ if (!File.Exists(paths.Database))
     throw new FileNotFoundException($"Importer database not found at '{paths.Database}'. Run the importer first or set Database to an existing SQLite file.", paths.Database);
 if (Directory.Exists(paths.HeroIconRoot))
     app.UseStaticFiles(new StaticFileOptions { FileProvider = new PhysicalFileProvider(paths.HeroIconRoot), RequestPath = "/portraits" });
+if (Directory.Exists(paths.UiIconRoot))
+    app.UseStaticFiles(new StaticFileOptions { FileProvider = new PhysicalFileProvider(paths.UiIconRoot), RequestPath = "/ui-icons" });
 
 app.MapHeroEndpoints();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));

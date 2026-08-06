@@ -14,4 +14,4 @@ public sealed record SkillDto(string Id, string Name, string? Description, strin
 public sealed record FilterOption(string Value, string Label);
 public sealed record HeroFilters(IEnumerable<string> Classes, IEnumerable<string> Tribes, IEnumerable<string> Elements,
     IEnumerable<string> DamageTypes, IEnumerable<string> Rarities, IEnumerable<string> Mobilities,
-    IEnumerable<string> Acquisitions, IEnumerable<FilterOption> Attributes, IEnumerable<string> Classifications);
+    IEnumerable<string> Acquisitions, IEnumerable<FilterOption> Attributes);

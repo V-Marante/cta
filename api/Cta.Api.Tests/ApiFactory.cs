@@ -8,18 +8,35 @@ namespace Cta.Api.Tests;
 
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
-    public ApiFactory(string gameId = "cta")
+    public ApiFactory(string gameId = "cta", bool withUiIcon = false, bool withHeroIcon = false)
     {
         Database = Path.Combine(Path.GetTempPath(), $"cta-api-{Guid.NewGuid():N}.sqlite");
+        UiIconRoot = Path.Combine(Path.GetTempPath(), $"cta-api-icons-{Guid.NewGuid():N}");
+        HeroIconRoot = Path.Combine(Path.GetTempPath(), $"cta-api-portraits-{Guid.NewGuid():N}");
         GameId = gameId;
+        if (withUiIcon)
+        {
+            Directory.CreateDirectory(Path.Combine(UiIconRoot, "elements"));
+            File.WriteAllBytes(Path.Combine(UiIconRoot, "elements", "fire.png"),
+                Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+3MxZ5wAAAABJRU5ErkJggg=="));
+        }
+        if (withHeroIcon)
+        {
+            Directory.CreateDirectory(HeroIconRoot);
+            File.WriteAllBytes(Path.Combine(HeroIconRoot, "Alpha.png"),
+                Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+3MxZ5wAAAABJRU5ErkJggg=="));
+        }
         CreateSchema();
     }
 
     public string Database { get; }
     public string GameId { get; }
+    public string UiIconRoot { get; }
+    public string HeroIconRoot { get; }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureAppConfiguration((_, config) =>
-        config.AddInMemoryCollection(new Dictionary<string, string?> { ["Database"] = Database, ["GameId"] = GameId, ["HeroIconRoot"] = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}") }));
+        config.AddInMemoryCollection(new Dictionary<string, string?> { ["Database"] = Database, ["GameId"] = GameId,
+            ["HeroIconRoot"] = HeroIconRoot, ["UiIconRoot"] = UiIconRoot }));
 
     public void Seed(string importId, string gameId, string finishedAt, params HeroSeed[] heroes)
     {
@@ -51,6 +68,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         Execute(db, "INSERT INTO relations(import_id,relation,source_key,target_key,ordinal,payload_json) VALUES($i,'character_skill',$h,'TestSkill',0,'{\"kind\":\"skill\"}')", ("$i", importId), ("$h", heroId));
     }
 
+    public void SeedPortraitReference(string importId, string heroId)
+    {
+        using var db = Open();
+        Entity(db, importId, "portrait", heroId, $$"""{"source_id":"{{heroId}}","frame_name":"GMI_FI_001.png"}""");
+    }
+
     private void CreateSchema()
     {
         using var db = Open();
@@ -66,7 +89,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private static void Localize(SqliteConnection db, string importId, string ns, string key, string field, string value) => Execute(db, "INSERT INTO localizations VALUES($i,$n,$k,'en',$f,$v)", ("$i", importId), ("$n", ns), ("$k", key), ("$f", field), ("$v", value));
     private static void Execute(SqliteConnection db, string sql, params (string, object)[] values) { using var command = db.CreateCommand(); command.CommandText = sql; foreach (var (name, value) in values) command.Parameters.AddWithValue(name, value); command.ExecuteNonQuery(); }
 
-    protected override void Dispose(bool disposing) { base.Dispose(disposing); if (File.Exists(Database)) File.Delete(Database); }
+    protected override void Dispose(bool disposing) { base.Dispose(disposing); if (File.Exists(Database)) File.Delete(Database); if (Directory.Exists(UiIconRoot)) Directory.Delete(UiIconRoot, true); if (Directory.Exists(HeroIconRoot)) Directory.Delete(HeroIconRoot, true); }
 }
 
 public sealed record HeroSeed(string Id, string Name, string Class = "Ranger", string Tribe = "Human", string Element = "Fire",

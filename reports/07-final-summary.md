@@ -1,5 +1,7 @@
 # Final Summary
 
+> **Superseded phase summary.** This closes the Google Play Games investigation, not the current repository state. See `reports/19-bluestacks-reconciliation.md`.
+
 ## 1. Where Files Were Found
 
 Google Play Games for Windows data was found under:

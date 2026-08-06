@@ -52,6 +52,10 @@ assets/
 extracted/
 samples/
 
+# Application-ready proprietary runtime material
+# Authentic assets are preferred for local development but must never enter Git.
+local/proprietary/
+
 # Generated inventories
 inventories/
 

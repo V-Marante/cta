@@ -1,5 +1,7 @@
 # Phase 3: Engine Detection
 
+> **Superseded.** BlueStacks APK inspection confirmed a custom native GodzilabEngine; the engine is no longer unresolved. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Result
 
 Likely game engine: unresolved from host-visible game files.

@@ -8,6 +8,8 @@ describe('HeroCard', () => {
     render(<HeroCard hero={hero} />)
     expect(screen.getByRole('heading', { name: 'Ada Hero' })).toBeInTheDocument()
     expect(screen.getByLabelText('Portrait unavailable')).toHaveTextContent('Ada Hero')
+    expect(screen.getByLabelText('Ranger')).toBeInTheDocument()
+    expect(screen.getByLabelText('Fire')).toBeInTheDocument()
   })
   it('navigates to hero detail', () => {
     render(<HeroCard hero={hero} />); fireEvent.click(screen.getByRole('button'))

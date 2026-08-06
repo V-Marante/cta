@@ -1,5 +1,7 @@
 # Phase 2: File Inventory
 
+> **Historical — Google Play Games.** This inventories emulator/platform storage, not the current game corpus. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Outputs
 
 - `inventories/files.csv`

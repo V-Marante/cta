@@ -19,6 +19,5 @@ export function getHeroes(query: HeroQuery, signal?: AbortSignal) {
   if (query.mobility) parameters.set('mobility', query.mobility)
   if (query.acquisition) parameters.set('acquisition', query.acquisition)
   if (query.attribute) parameters.set('attribute', query.attribute)
-  if (query.includeVariants) parameters.set('includeNonCollectible', 'true')
   return request<HeroPage>(`/api/heroes?${parameters}`, signal)
 }

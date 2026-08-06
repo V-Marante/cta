@@ -1,5 +1,7 @@
 # Phase 9: Runtime Inspection
 
+> **Partially superseded.** BlueStacks shared runtime data is captured; app-private storage remains unresolved. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Status
 
 Limited to log-derived runtime path discovery.

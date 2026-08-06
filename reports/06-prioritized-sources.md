@@ -1,5 +1,7 @@
 # Phase 7: Prioritized Sources
 
+> **Superseded.** BlueStacks APKs and shared runtime data replace the Google Play Games disk image as primary sources. See `reports/19-bluestacks-reconciliation.md`.
+
 | Priority | Source | Format | Likely Content | Confidence | Difficulty | Recommended Parser/Tool | Linkable Names/Stats/Images | Version-specific | Automatable |
 |---|---|---|---|---|---|---|---|---|---|
 | A | `C:\Users\<windows-user>\AppData\Local\Google\Play Games\userdata_<instance>.gz5\avd\userdata.img` | Android/AVD disk image | Installed APK/splits, app-private files, downloaded game cache, databases | High | Medium to high; read access needed | Read-only image mount or normal Android package listing tooling | Likely yes after APK/cache discovery | Yes | Yes, after reviewed method |

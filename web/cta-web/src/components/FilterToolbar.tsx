@@ -8,7 +8,6 @@ export function FilterToolbar({ filters, query, update }: { filters: Filters; qu
     <Select label="Filter by mobility" value={query.mobility} empty="Ground & flying" options={filters.mobilities} change={mobility => update({ mobility })} />
     <Select label="Filter by acquisition" value={query.acquisition} empty="All acquisition" options={filters.acquisitions} change={acquisition => update({ acquisition })} />
     <select value={query.attribute} onChange={e => update({ attribute: e.target.value })} aria-label="Filter by attribute"><option value="">All attributes</option>{filters.attributes.map(x => <option value={x.value} key={x.value}>{x.label}</option>)}</select>
-    <label className="toggle"><input type="checkbox" checked={query.includeVariants} onChange={e => update({ includeVariants: e.target.checked })} /> Include variants/NPCs</label>
   </section>
 }
 

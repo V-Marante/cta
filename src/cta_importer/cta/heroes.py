@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from ..contracts import ParseContext, ParserDescriptor
@@ -17,6 +18,7 @@ _PASSIVE_LABELS = {
     "NegativeEffectDuration": "negative-effect duration", "DecreaseElementalDamage": "elemental damage reduction",
 }
 _RARITY_NAMES = {1: "Common", 2: "Rare", 3: "Epic", 4: "Legendary"}
+_JOB_NAMES = {"Fighter": "Brawler"}
 
 
 def passive(code: str | None, target: str | None, value: str | None) -> dict:
@@ -40,7 +42,7 @@ def passive(code: str | None, target: str | None, value: str | None) -> dict:
 
 
 class HeroesParser:
-    descriptor = ParserDescriptor("cta.heroes", "1.3.0", 1, priority=100)
+    descriptor = ParserDescriptor("cta.heroes", "1.5.0", 1, priority=100)
 
     def accepts(self, context: ParseContext, artifact: SourceArtifact) -> bool:
         return Path(artifact.relative_path).name == "Heroes.csv"
@@ -49,6 +51,11 @@ class HeroesParser:
         entities: list[EntityRecord] = []
         relations: list[RelationRecord] = []
         diagnostics: list[Diagnostic] = []
+        character_keys: dict[str, str] = {}
+        character_path = context.source_root / "Persos.xml"
+        if character_path.exists():
+            character_keys = {(node.get("key") or "").lower(): (node.get("key") or "")
+                for node in ET.parse(character_path).getroot().findall("character")}
         rows = csv.DictReader(artifact.read_text().splitlines())
         for ordinal, row in enumerate(rows, 1):
             key = (row.get("Key") or "").strip()
@@ -57,9 +64,11 @@ class HeroesParser:
                 continue
             raw = {str(k): v for k, v in row.items() if k is not None}
             traits = [value.strip() for name in ("Ability1", "Ability2", "Ability3") if (value := row.get(name)) and value.strip()]
+            source_class = (row.get("Class") or "").strip() or None
             payload = {
                 "source_id": key, "canonical_name": (row.get("Name") or "").strip() or None,
-                "class": (row.get("Class") or "").strip() or None, "tribe": (row.get("Tribe") or "").strip() or None,
+                "class": _JOB_NAMES.get(source_class, source_class), "source_class": source_class,
+                "tribe": (row.get("Tribe") or "").strip() or None,
                 "sex": (row.get("Sex") or "").strip() or None, "damage_type": (row.get("Damage Type") or "").strip() or None,
                 "element": (row.get("Elemental") or "").strip() or None,
                 "mobility": "flying" if flag(row.get("Flying")) else "ground", "traits": traits,
@@ -78,5 +87,8 @@ class HeroesParser:
             }
             source = location(artifact, key)
             entities.append(EntityRecord("hero", key, payload, ordinal, source))
-            relations.append(RelationRecord("hero_character", "hero", key, "character", key, ordinal=ordinal, source=source))
+            character_id = character_keys.get(key.lower(), key)
+            relation_payload = ({"source_target_id": key, "case_normalized": True} if character_id != key else {})
+            relations.append(RelationRecord("hero_character", "hero", key, "character", character_id,
+                relation_payload, ordinal=ordinal, source=source))
         return ParseResult(tuple(entities), tuple(relations), diagnostics=tuple(diagnostics))

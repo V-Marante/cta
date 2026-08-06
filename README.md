@@ -1,6 +1,6 @@
 # Crush Them All Game Data Investigation
 
-This workspace contains a read-only local investigation of Google Play Games for Windows data related to:
+This workspace contains extraction, import, API, and frontend tooling for locally inspected Crush Them All data. The current extraction route is BlueStacks with its Windows `HD-Adb.exe`; the earlier Google Play Games investigation is retained only as historical provenance.
 
 - Game: `Crush Them All - PVP Idle RPG`
 - Android package: `com.godzilab.idlerpg`
@@ -8,19 +8,21 @@ This workspace contains a read-only local investigation of Google Play Games for
 - Rights holder noted by user: `Stillfront Group AB`
 - Related developer/company noted by user: `Godzillab` / local package namespace `godzilab`
 
-The original installation was not modified. Small SQLite databases were copied into `samples/` before inspection. Large emulator images were inventoried only by metadata and were not extracted.
+The original installations were not modified. BlueStacks provided package-scoped, read-only copies of the APK splits and shared runtime data without requiring emulator-image extraction.
 
 ## Workspace
 
-- `reports/`: phase reports and inspection artifacts
+- `reports/`: chronological reports; start with `reports/README.md`
 - `inventories/files.csv`: machine-readable file inventory
 - `inventories/files.json`: JSON equivalent of the file inventory
 - `samples/`: copied small samples used for inspection
 - `scripts/`: reusable read-only investigation scripts
 - `logs/`: reserved for future script logs
-- `extracted/`: reserved; no bulk extraction was performed
+- `extracted/`: ignored local importer databases and derived data
 
-## Re-run
+## Historical Google Play Games inventory
+
+The commands below reproduce only the original host-level Google Play Games inventory. They are not the current CTA extraction workflow and should not be used to infer the current game corpus.
 
 From WSL:
 
@@ -44,9 +46,9 @@ From PowerShell:
 
 ## Current Conclusion
 
-BlueStacks exposed `com.godzilab.idlerpg` through its Windows `HD-Adb.exe`. Version `2.0.821` and its four APKs were copied to `samples/bluestacks/apk/`; approximately 58 MB of accessible runtime content was copied to `samples/bluestacks/shared-data/`.
+BlueStacks exposed `com.godzilab.idlerpg` through its Windows `HD-Adb.exe`. Version `2.0.821` was reconfirmed on 2026-08-06 as the latest version offered by the installed BlueStacks distribution: no update was available and the launched package reported `versionCode=200821`. Four APKs are retained locally under `samples/bluestacks/apk/`, with approximately 58 MB of accessible runtime content under `samples/bluestacks/shared-data/`. Historical Google Play Games logs observed `2.0.822`; this remains cross-distribution provenance rather than the source version used by the repository.
 
-The game uses the custom native `GodzilabEngine`, not Unity. Its current downloaded content is directly extractable: `cache/content/` contains gameplay CSV/XML files, localization, Spine data, sprite atlases, textures, and animation files. Four ZIP-compatible `.bin` files in `cache/patch/` preserve the downloaded patch bundles. See `reports/17-bluestacks-extraction.md`.
+The game uses the custom native `GodzilabEngine`, not Unity. The retained `cache/content/` contains gameplay CSV/XML files, localization, Spine data, sprite atlases, textures, and animation files. Four ZIP-compatible `.bin` files in `cache/patch/` preserve downloaded patch bundles. The base APK also contains authentic UI and character atlases absent from the materialized cache. See `reports/README.md` and `reports/19-bluestacks-reconciliation.md` before using older reports.
 
 ## Importer Infrastructure
 
@@ -66,7 +68,7 @@ The importer currently expects locally extracted source content at:
 samples/bluestacks/shared-data/cache/content/
 ```
 
-Users must perform their own local extraction. The contents of `samples/`, `assets/`, and `extracted/` remain local and must not be committed.
+Users must perform their own local extraction. The contents of `samples/`, `assets/`, and `extracted/` remain local and must not be committed. Authentic copied, decoded, or application-ready assets belong under `local/proprietary/`, which is also ignored. Local builds should use authentic game material from that directory where available; clean checkouts retain text or synthetic fallbacks.
 
 Initialize the importer database:
 
@@ -100,12 +102,37 @@ Warnings for incomplete localization, unresolved legacy skills, or missing portr
 
 2. Start the read-only ASP.NET Core API from the repository root:
 
+Extract the authentic job-indicator and element icons from the retained read-only APK into the ignored proprietary runtime directory:
+
+```bash
+python3 scripts/extract-cta-ui-icons.py \
+  samples/bluestacks/apk/base.apk \
+  local/proprietary/ui-icons
+```
+
+The dependency-free extractor validates PVR/plist dimensions and frame bounds and writes a SHA-256-backed `provenance.json`. It uses the ten distinct neutral `HE_Job*.png` indicators from `UI1`; internal `Fighter` maps to the fist-shaped Brawler indicator. It intentionally does not use the similarly named `Rs_HeJob_*` awakening-resource frames.
+
+Install the pinned optional ETC1 decoder and extract compact hero portraits:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[assets]'
+.venv/bin/python scripts/extract-cta-hero-icons.py \
+  samples/bluestacks/apk/base.apk \
+  samples/bluestacks/shared-data/cache/content \
+  local/proprietary/hero-icons
+```
+
+The extractor uses the same element/index mapping as the importer, validates atlas metadata and 162×162 frames, and writes source hashes plus every resolved/unresolved mapping to ignored `provenance.json`. In the verified BlueStacks `2.0.821` corpus it extracts 125 source-row icons and covers all 116 playable heroes.
+
+Then start the API:
+
 ```bash
 Database=extracted/cta.sqlite GameId=com.godzilab.idlerpg \
   dotnet run --project api/Cta.Api --urls http://localhost:5080
 ```
 
-The large `HP_<hero>` presentation artwork is deliberately ignored. The collection view uses a live assembled character rather than a standalone small portrait, so heroes currently use name-only placeholders. A future genuine small-icon set can be supplied through `HeroIconRoot`; it defaults to `generated/hero-icons`. The API never modifies the importer database.
+Authentic compact hero portraits are served from `HeroIconRoot`, which defaults to `local/proprietary/hero-icons`. Authentic job and element icons are served from `UiIconRoot`, which defaults to `local/proprietary/ui-icons`. Both directories are ignored and must not be staged. The API exposes them only through static GET/HEAD handling and never modifies them or the importer database.
 
 3. In another terminal, start the React application:
 
@@ -117,4 +144,4 @@ npm run dev
 
 Open `http://localhost:5173`. Set `VITE_API_URL` before `npm run dev` if the API is not at `http://localhost:5080`.
 
-The roster defaults to collectible heroes and can optionally include classified variants, enemies, and NPCs. It supports job, element, rarity, mobility, acquisition, and attribute filters. The UI falls back to initials for missing portrait files, canonical names or raw IDs for missing English names, and an unavailable-description message for incomplete skill localization.
+The roster exposes only heroes classified as playable. It supports job, element, rarity, mobility, acquisition, and attribute filters. Cards use authentic locally extracted CTA job-indicator and element icons when present and accessible text when they are absent. The UI also falls back to names for missing portrait files, canonical names or raw IDs for missing English names, and an unavailable-description message for incomplete skill localization.

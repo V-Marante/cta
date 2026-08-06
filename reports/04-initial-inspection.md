@@ -1,5 +1,7 @@
 # Phase 4: Initial Inspection
 
+> **Historical — Google Play Games.** These platform database and string results are provenance only, not current game-data sources. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Samples Copied
 
 Small databases copied to `samples/` before parsing:

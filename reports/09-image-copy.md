@@ -1,5 +1,7 @@
 # Phase 3: Image Copy
 
+> **Obsolete path — do not retry.** BlueStacks package-scoped retrieval removed the need to copy the Google Play Games sparse disk image. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Status
 
 `userdata.img` was not copied successfully.

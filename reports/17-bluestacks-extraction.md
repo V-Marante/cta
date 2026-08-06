@@ -1,5 +1,7 @@
 # BlueStacks Package and Game-Data Extraction
 
+> **Current retained extraction baseline.** BlueStacks `2.0.821` was reconfirmed as the latest version offered by the installed BlueStacks distribution on 2026-08-06. See `reports/19-bluestacks-reconciliation.md` for the cross-distribution version caveat, gaps, and source precedence.
+
 ## Result
 
 The extraction blocker is resolved. BlueStacks' Windows `HD-Adb.exe` exposed the installed package and allowed standard, non-root pulls of both APK files and shared runtime data.

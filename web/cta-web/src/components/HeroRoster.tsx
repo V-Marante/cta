@@ -6,7 +6,7 @@ import { FilterToolbar } from './FilterToolbar'
 import { HeroCard } from './HeroCard'
 
 const emptyFilters: Filters = { classes: [], tribes: [], elements: [], damageTypes: [], rarities: [], mobilities: [], acquisitions: [], attributes: [] }
-const initialQuery: HeroQuery = { search: '', heroClass: '', element: '', rarity: '', mobility: '', acquisition: '', attribute: '', includeVariants: false }
+const initialQuery: HeroQuery = { search: '', heroClass: '', element: '', rarity: '', mobility: '', acquisition: '', attribute: '' }
 
 export function HeroRoster() {
   const [heroes, setHeroes] = useState<Hero[]>([]), [filters, setFilters] = useState(emptyFilters)

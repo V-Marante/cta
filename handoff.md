@@ -2,6 +2,10 @@
 
 Last updated: 2026-08-06
 
+> Classification update: the source-backed roster milestone is complete. The latest local import now classifies 116 collectible, 16 enemy, 10 uncertain, 2 NPC, 2 summoned variants, 1 transformed variant, and 1 manually verified non-collectible (`Werewolf`). Case-only hero/character/skill/acquisition joins are resolved with raw identifiers retained. Counts and recommendations below describe the pre-milestone audit; `docs/handoff.md` is the canonical current handoff.
+
+> Hero-data correction update: internal class `Fighter` is exposed as `Brawler`; medal acquisition includes Arena, Arena 3v3, and Crusade shops plus starter packs; Senshi resolves Halloween Chest and Crusade Shop. The public API/UI omit all non-playable classifications. Authentic distinct `HE_Job*` indicators and element icons are extracted reproducibly from `UI1` into ignored `local/proprietary/ui-icons/`; `Rs_HeJob_*` awakening resources are explicitly excluded. Visible text is the clean-checkout fallback. Star values remain labeled as raw source fields because their exact player-facing semantics are not proven.
+
 ## Purpose and current state
 
 This repository now contains the first hero-library vertical slice: CTA-specific importers, normalized SQLite persistence with provenance, validation, a read-only ASP.NET Core API, a React/TypeScript roster/detail UI, synthetic importer tests, and local-development documentation.
@@ -23,7 +27,7 @@ python3 scripts/audit-hero-data.py \
   generated/reports/hero-data-audit.md
 ```
 
-Important repository rules remain in force: `samples/`, `assets/`, and `extracted/` are read-only local inputs; never stage extracted content, generated databases, generated images, or generated reports.
+Important repository rules remain in force: `samples/`, `assets/`, and `extracted/` are read-only local inputs. Put copied, decoded, converted, or application-ready proprietary assets under ignored `local/proprietary/`; prefer them in local builds, but never stage extracted content, generated databases, generated images, or generated reports.
 
 ## Executive finding
 
@@ -38,7 +42,7 @@ For records that really are player heroes, the core balance import is substantia
 5. decide how to represent source fields that are genuinely blank rather than inventing values;
 6. parse or derive richer skill mechanics and display text.
 
-## Compact hero icons: solved asset discovery, not implemented
+## Compact hero icons: implemented
 
 The desired small portrait does exist. Previous searches missed it because its frame name does not contain the hero ID.
 
@@ -75,21 +79,14 @@ The frames live in:
 
 They are 162×162. The PVR v2 textures use ETC1 (`flags & 0xff == 0x36`, four bits per pixel), not RGBA4444 and not PVRTC. `texture2ddecoder.decode_etc1` successfully decoded the atlas during investigation; it returns BGRA, so red and blue channels must be swapped before PNG output.
 
-Coverage against the current 127-record collectible set:
-
-- 115 map directly to a `GMI` frame.
-- `DDSaberDancer` and `Pumpking` should map after case-insensitive character joins.
-- 10 have no usable `iconIdx`: `ArthusKnight`, `GreenArcher`, `IceGolem`, `MummyGiant`, `Rolexo`, `SkeletonArcher`, `ViForky`, `ViLokt`, `ViRagnar`, `VuTNTbomb`.
-
-Those ten strongly overlap suspected non-roster or legacy records. Do not fall back to `HP_<hero>` presentation art or `SK_<skill>` skill icons. If a compact frame cannot be resolved, the UI should display the hero name.
+Current coverage is 116/116 playable heroes. Across all 148 `Heroes.csv` rows, 125 resolve to atlas frames and 23 non-playable/legacy/variant rows remain unresolved. Case-insensitive joins resolve `DDSaberDancer`/`DDSaberdancer` and `Pumpking`/`PumpKing`. `CuddlesBerserk` requests absent `GMI_EA_033`; the retained Earth atlas ends at 32. Do not fall back to `HP_<hero>` presentation art or `SK_<skill>` skill icons. If a compact frame cannot be resolved, the UI displays the hero name.
 
 Recommended implementation:
 
-- Change the portrait entity to persist element code, raw `iconIdx`, computed GMI frame, atlas plist/texture, and source provenance.
-- Add a local extractor for only referenced GMI frames.
-- Put outputs under ignored `generated/hero-icons`.
-- Configure the API with `HeroIconRoot` and return a URL only when the extracted PNG exists.
-- Add synthetic tests for element/index mapping and missing indices. Do not add game images to fixtures.
+- Portrait entities persist element code, raw `iconIdx`, computed GMI frame, atlas plist/texture, and source provenance.
+- `scripts/extract-cta-hero-icons.py` extracts only resolvable GMI references into ignored `local/proprietary/hero-icons` with source hashes and unresolved rows in `provenance.json`.
+- The API uses `HeroIconRoot` and returns a URL only when both a persisted portrait reference and canonical-ID PNG exist.
+- Synthetic tests cover all five element codes, the second Water atlas, invalid indices, atlas bounds, and read-only API behavior. No game image is committed.
 
 ## Classification is the highest-impact correctness gap
 
@@ -274,7 +271,9 @@ Current warnings:
 | Code | Count | Interpretation |
 |---|---:|---|
 | `missing_localization_key` | 88 | Mix of harmless missing overrides, genuinely absent skill names, and case-sensitive joins; severity/rules need refinement. |
-| `missing_portrait_reference` | 12 | Two case mismatches and ten records without `iconIdx`; compact GMI validation not implemented. |
+| `missing_portrait_reference` | 10 | Source rows with no generic portrait reference. |
+| `missing_compact_portrait_reference` | 12 | Non-playable/legacy/variant rows with no usable compact icon input. |
+| `invalid_compact_portrait_reference` | 1 | `CuddlesBerserk` requests absent Earth index 33. |
 | `unresolved_relation_target` | 3 | `DDSaberDancer`, `Pumpking`, and `MokingFI`; all have case-insensitive targets. |
 | `unresolved_skill_reference` | 1 | `MokingFI` → `MoKingFI` case mismatch. |
 
@@ -283,7 +282,7 @@ The 1,293 `unmatched_artifact` informational diagnostics mostly represent animat
 ## Recommended next sequence
 
 1. Add case-insensitive entity/relation resolution with raw-ID retention. Re-import and verify the three unresolved relations disappear.
-2. Implement ETC1 GMI icon extraction and provenance-aware portrait mapping. Expect at least 117 currently classified records to resolve before classification cleanup.
+2. Preserve the implemented ETC1 GMI extractor and provenance-aware portrait mapping; current playable coverage is 116/116.
 3. Replace the permissive collectible classifier with evidence-based classification and an `uncertain`/`unreleased` state. Explicitly verify `Werewolf` and the ten no-icon records.
 4. Separate normalized acquisition relations from legacy availability fallbacks in API contracts and filters.
 5. Refine localization validation so canonical English fallbacks are accepted and blank override entries are not treated as missing usable content.
@@ -317,7 +316,7 @@ After an importer parser-version change, the import should not reuse the old dat
 ## Known local-development behavior
 
 - Database paths are resolved from the repository root; starting the API from `api/Cta.Api` should not break a repository-relative `Database` setting.
-- The API now intentionally ignores old large `generated/portraits` artwork. Small icons belong under `generated/hero-icons` via `HeroIconRoot` once extraction exists.
+- The API intentionally ignores old large `generated/portraits` artwork. Authentic job/element files are served read-only from `local/proprietary/ui-icons` via `UiIconRoot`; all playable compact hero icons are served from `local/proprietary/hero-icons` via `HeroIconRoot`.
 - The UI shows the full hero name when no compact icon resolves.
 - Large `HP_*` presentation art and `SK_*` skill icons must not be used as hero-card fallbacks.
 - `Human`, `Viking`, and similar tribe/style values were removed from player-facing roster labels because they are internal source classifications not shown in the game UI.

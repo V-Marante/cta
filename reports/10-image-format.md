@@ -1,5 +1,7 @@
 # Phase 4: Image Format
 
+> **Obsolete path.** Disk-image format analysis is no longer a prerequisite because BlueStacks provided package-scoped files. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Status
 
 Not performed.

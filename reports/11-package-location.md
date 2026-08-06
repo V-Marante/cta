@@ -1,5 +1,7 @@
 # Phase 6: Package Location
 
+> **Historical — Google Play Games.** BlueStacks supplied a separately versioned package and its APKs; do not treat these paths or version values as current. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Outputs
 
 - `inventories/package-files.csv`

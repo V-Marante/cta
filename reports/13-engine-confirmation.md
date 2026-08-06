@@ -1,5 +1,7 @@
 # Phase 8: Engine Confirmation
 
+> **Superseded.** The retained BlueStacks x86_64 split confirms a custom native GodzilabEngine. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Result
 
 Engine remains unresolved.

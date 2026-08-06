@@ -8,4 +8,4 @@ export type FilterOption = { value: string; label: string }
 export type Filters = { classes: string[]; tribes: string[]; elements: string[]; damageTypes: string[]; rarities: string[]; mobilities: string[]; acquisitions: string[]; attributes: FilterOption[] }
 export type HeroPage = { items: Hero[]; total: number; page: number; pageSize: number }
 export type HeroDetailModel = { hero: Hero; skills: Skill[] }
-export type HeroQuery = { search: string; heroClass: string; element: string; rarity: string; mobility: string; acquisition: string; attribute: string; includeVariants: boolean }
+export type HeroQuery = { search: string; heroClass: string; element: string; rarity: string; mobility: string; acquisition: string; attribute: string }

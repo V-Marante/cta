@@ -9,10 +9,12 @@ public sealed class RepositoryPaths
         var root = FindRepositoryRoot(environment.ContentRootPath);
         Database = Resolve(options.Value.Database, root);
         HeroIconRoot = Resolve(options.Value.HeroIconRoot, root);
+        UiIconRoot = Resolve(options.Value.UiIconRoot, root);
     }
 
     public string Database { get; }
     public string HeroIconRoot { get; }
+    public string UiIconRoot { get; }
 
     private static string Resolve(string path, string root) =>
         Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(root, path));

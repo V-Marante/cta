@@ -85,9 +85,17 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
 
     private static async Task<Dictionary<string, List<AcquisitionDto>>> Acquisitions(Microsoft.Data.Sqlite.SqliteConnection db, string importId)
     {
-        await using var command = db.CreateCommand(); command.CommandText = "SELECT r.source_key,r.target_key,r.payload_json,coalesce(l.value,r.target_key) FROM relations r LEFT JOIN localizations l ON l.import_id=r.import_id AND l.namespace='acquisition_source' AND l.entity_key=r.target_key AND l.locale='en' AND l.field='name' WHERE r.import_id=$import AND r.relation='hero_acquisition'"; command.Parameters.AddWithValue("$import", importId);
+        await using var command = db.CreateCommand(); command.CommandText = """
+          SELECT r.source_key,r.target_key,r.payload_json,
+            coalesce(l.value,json_extract(a.payload_json,'$.name'),r.target_key),
+            coalesce(json_extract(a.payload_json,'$.kind'),'chest')
+          FROM relations r
+          LEFT JOIN localizations l ON l.import_id=r.import_id AND l.namespace='acquisition_source' AND l.entity_key=r.target_key AND l.locale='en' AND l.field='name'
+          LEFT JOIN entities a ON a.import_id=r.import_id AND a.namespace='acquisition_source' AND a.entity_key=r.target_key
+          WHERE r.import_id=$import AND r.relation='hero_acquisition'
+          """; command.Parameters.AddWithValue("$import", importId);
         var result = new Dictionary<string, List<AcquisitionDto>>(StringComparer.OrdinalIgnoreCase);
-        await using var rows = await command.ExecuteReaderAsync(); while (await rows.ReadAsync()) { using var json = JsonDocument.Parse(rows.GetString(2)); if (!result.TryGetValue(rows.GetString(0), out var sources)) result[rows.GetString(0)] = sources = []; sources.Add(new(rows.GetString(1), rows.GetString(3), "chest", HeroMapper.GetString(json.RootElement, "medal_id"), !json.RootElement.TryGetProperty("current", out var current) || current.ValueKind != JsonValueKind.False)); }
+        await using var rows = await command.ExecuteReaderAsync(); while (await rows.ReadAsync()) { using var json = JsonDocument.Parse(rows.GetString(2)); if (!result.TryGetValue(rows.GetString(0), out var sources)) result[rows.GetString(0)] = sources = []; sources.Add(new(rows.GetString(1), rows.GetString(3), rows.GetString(4), HeroMapper.GetString(json.RootElement, "medal_id"), !json.RootElement.TryGetProperty("current", out var current) || current.ValueKind != JsonValueKind.False)); }
         return result;
     }
 }

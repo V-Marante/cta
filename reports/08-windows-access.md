@@ -1,5 +1,7 @@
 # Phase 1: Windows Access From WSL
 
+> **Historical environment note.** Current Android interaction uses user-executed Windows PowerShell and BlueStacks' `HD-Adb.exe`; these WSL interop failures are not extraction blockers. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Prior Artifact Review
 
 Before this phase, the existing reports and inventories were read:

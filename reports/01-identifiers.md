@@ -1,5 +1,7 @@
 # Phase 1: Identifiers
 
+> **Historical — Google Play Games.** Package identity remains useful, but the access limitations are superseded by the BlueStacks extraction. See `reports/19-bluestacks-reconciliation.md`.
+
 ## Confirmed
 
 - Game display name: `Crush Them All - PVP Idle RPG`

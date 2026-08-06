@@ -1,5 +1,7 @@
 # Phase 8: APK Inspection
 
+> **Superseded.** APK and split inspection was completed using the retained BlueStacks package. See `reports/17-bluestacks-extraction.md` and `reports/19-bluestacks-reconciliation.md`.
+
 ## Status
 
 Not performed.

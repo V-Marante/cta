@@ -1,5 +1,7 @@
 # Phase 9: Content Candidates
 
+> **Superseded.** The APK and shared-cache candidates were obtained through BlueStacks. See `reports/19-bluestacks-reconciliation.md` for the remaining narrow gaps.
+
 ## Candidate Summary
 
 | Priority | Candidate | Basis | Confidence | Notes |

@@ -29,11 +29,11 @@ public sealed class HeroApiTests
     }
 
     [Fact]
-    public async Task Collectible_default_non_collectible_opt_in_search_and_filters_work()
+    public async Task Only_collectible_heroes_are_exposed_and_search_and_filters_work()
     {
         using var factory = Seeded(); var client = factory.CreateClient();
         Assert.Equal(2, (await Get(client, "/api/heroes")).GetProperty("total").GetInt32());
-        Assert.Equal(3, (await Get(client, "/api/heroes?includeNonCollectible=true")).GetProperty("total").GetInt32());
+        Assert.Equal(2, (await Get(client, "/api/heroes?includeNonCollectible=true")).GetProperty("total").GetInt32());
         foreach (var query in new[] { "search=aLPHa", "class=Ranger", "element=Fire", "rarity=Epic", "mobility=ground", "acquisition=Test%20Chest", "attribute=Evade" })
             Assert.Equal(1, (await Get(client, $"/api/heroes?{query}")).GetProperty("total").GetInt32());
     }
@@ -68,6 +68,49 @@ public sealed class HeroApiTests
         Assert.Equal("ok", (await Get(client, "/health")).GetProperty("status").GetString());
         await using var db = await factory.Services.GetRequiredService<SqliteConnectionFactory>().OpenAsync();
         Assert.Contains("Mode=ReadOnly", db.ConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Existing_local_ui_icons_are_served_read_only()
+    {
+        using var factory = new ApiFactory(withUiIcon: true);
+        var client = factory.CreateClient();
+        var response = await client.GetAsync("/ui-icons/elements/fire.png");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/ui-icons/elements/fire.png", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Existing_mapped_hero_icons_are_returned_and_served_read_only()
+    {
+        using var factory = new ApiFactory("cta", withHeroIcon: true);
+        factory.Seed("current", "cta", "2026-02-01", new HeroSeed("Alpha", "Alpha Hero"));
+        factory.SeedPortraitReference("current", "Alpha");
+        var client = factory.CreateClient();
+        var hero = (await Get(client, "/api/heroes/Alpha")).GetProperty("hero");
+        Assert.Equal("/portraits/Alpha.png", hero.GetProperty("portraitUrl").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/portraits/Alpha.png")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/portraits/Alpha.png", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Non_playable_classifications_are_omitted_from_all_hero_endpoints()
+    {
+        using var factory = new ApiFactory("cta");
+        var categories = new[] { "collectible", "uncertain", "enemy", "npc", "summoned_variant", "transformed_variant", "cosmetic_variant", "non_collectible" };
+        factory.Seed("categories", "cta", "2026-04-01", categories.Select((kind, index) =>
+            new HeroSeed($"Hero{index}", $"Hero {index}", Classification: kind)).ToArray());
+        var client = factory.CreateClient();
+        Assert.Equal(1, (await Get(client, "/api/heroes")).GetProperty("total").GetInt32());
+        Assert.Equal(1, (await Get(client, "/api/heroes?includeNonCollectible=true")).GetProperty("total").GetInt32());
+        foreach (var index in Enumerable.Range(1, categories.Length - 1))
+        {
+            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/heroes/Hero{index}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/heroes/Hero{index}/skills")).StatusCode);
+        }
+        var metadata = await Get(client, "/api/heroes/filters");
+        Assert.False(metadata.TryGetProperty("classifications", out _));
     }
 
     private static ApiFactory Seeded()
