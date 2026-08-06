@@ -6,10 +6,10 @@ namespace Cta.Api.Features.Heroes;
 
 public static class HeroMapper
 {
-    public static HeroSummary Map(string id, string payloadJson, string? localizedName, bool hasPortrait,
+    public static HeroSummary Map(string id, string payloadJson, string? localizedName,
         string? classificationJson, IReadOnlyDictionary<string, string> descriptions,
         IReadOnlyDictionary<string, List<Dictionary<string, string>>> parameters,
-        IReadOnlyDictionary<string, List<AcquisitionDto>> acquisitions, ISet<string> portraitIds)
+        IReadOnlyDictionary<string, List<AcquisitionDto>> acquisitions, string? portraitUrl)
     {
         using var json = JsonDocument.Parse(payloadJson); var root = json.RootElement;
         string? Text(string name) => GetString(root, name);
@@ -25,7 +25,7 @@ public static class HeroMapper
         var heroAcquisition = acquisitions.GetValueOrDefault(id)?.ToList() ?? [];
         return new(id, localizedName ?? canonical ?? id, Text("class"), Text("tribe"), Text("element"), Text("damage_type"),
             Text("sex"), Text("mobility") ?? (IsFlag(RawText("Flying")) ? "flying" : "ground"), traitDtos,
-            hasPortrait && portraitIds.Contains(id) ? $"/portraits/{Uri.EscapeDataString(id)}.png" : null,
+            portraitUrl,
             ObjectOrEmpty(root, "stats"), ObjectOrEmpty(root, "stat_semantics"), ObjectOrEmpty(root, "source_calculations"),
             root.TryGetProperty("passive", out var passive) ? passive.Clone() : JsonSerializer.SerializeToElement(new { code = RawText("SP4"), target = RawText("SP4 Target"), source_value = Scalar(RawText("SP4 Value")) }),
             root.TryGetProperty("progression", out var progression) ? progression.Clone() : JsonSerializer.SerializeToElement(new { base_stars = Scalar(RawText("BaseStars")), max_stars = Scalar(RawText("MaxStars")), rarity = Scalar(RawText("Rarity")), rarity_name = RarityName(RawText("Rarity")), factor_per_star = Scalar(RawText("Factor per Star")) }),

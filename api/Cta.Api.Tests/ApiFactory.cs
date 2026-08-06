@@ -8,8 +8,14 @@ namespace Cta.Api.Tests;
 
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
-    public ApiFactory(string gameId = "cta", bool withUiIcon = false, bool withHeroIcon = false)
+    private readonly bool _createDatabase;
+    private readonly string _environment;
+    private readonly string _portraitMode;
+    public ApiFactory(string gameId = "cta", bool withUiIcon = false, bool withHeroIcon = false, bool createDatabase = true, string environment = "Development", string portraitMode = "local")
     {
+        _createDatabase = createDatabase;
+        _environment = environment;
+        _portraitMode = portraitMode;
         Database = Path.Combine(Path.GetTempPath(), $"cta-api-{Guid.NewGuid():N}.sqlite");
         UiIconRoot = Path.Combine(Path.GetTempPath(), $"cta-api-icons-{Guid.NewGuid():N}");
         HeroIconRoot = Path.Combine(Path.GetTempPath(), $"cta-api-portraits-{Guid.NewGuid():N}");
@@ -26,7 +32,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             File.WriteAllBytes(Path.Combine(HeroIconRoot, "Alpha.png"),
                 Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+3MxZ5wAAAABJRU5ErkJggg=="));
         }
-        CreateSchema();
+        if (createDatabase) CreateSchema();
     }
 
     public string Database { get; }
@@ -34,9 +40,18 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public string UiIconRoot { get; }
     public string HeroIconRoot { get; }
 
-    protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureAppConfiguration((_, config) =>
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment(_environment);
+        builder.ConfigureAppConfiguration((_, config) =>
         config.AddInMemoryCollection(new Dictionary<string, string?> { ["Database"] = Database, ["GameId"] = GameId,
-            ["HeroIconRoot"] = HeroIconRoot, ["UiIconRoot"] = UiIconRoot }));
+            ["HeroIconRoot"] = HeroIconRoot, ["UiIconRoot"] = UiIconRoot,
+            ["AllowedOrigins:0"] = "https://frontend.example.test",
+            ["ApplicationVersion"] = "test-version", ["Commit"] = "abcdef1",
+            ["DataImportId"] = "test-import", ["GameVersion"] = "test-game",
+            ["DatabaseHash"] = "sha256:test", ["AssetsVersion"] = "test-assets",
+            ["PortraitMode"] = _portraitMode }));
+    }
 
     public void Seed(string importId, string gameId, string finishedAt, params HeroSeed[] heroes)
     {

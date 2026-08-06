@@ -3,10 +3,11 @@ using System.Text.RegularExpressions;
 using System.Collections.Concurrent;
 using Cta.Api.Configuration;
 using Cta.Api.Data;
+using Microsoft.Extensions.Options;
 
 namespace Cta.Api.Features.Heroes;
 
-public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSelector imports, RepositoryPaths paths)
+public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSelector imports, RepositoryPaths paths, IOptions<CtaOptions> options)
 {
     private readonly ConcurrentDictionary<string, Lazy<Task<IReadOnlyList<HeroSummary>>>> _heroes = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<(string ImportId, string HeroId), Lazy<Task<IReadOnlyList<SkillDto>>>> _skills = new();
@@ -36,10 +37,24 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
         command.Parameters.AddWithValue("$import", importId);
         var result = new List<HeroSummary>();
         await using var rows = await command.ExecuteReaderAsync();
-        while (await rows.ReadAsync()) result.Add(HeroMapper.Map(rows.GetString(0), rows.GetString(1), rows.IsDBNull(2) ? null : rows.GetString(2),
-            rows.GetBoolean(3), rows.IsDBNull(4) ? null : rows.GetString(4), descriptions, parameters, acquisitions, _portraitIds));
+        while (await rows.ReadAsync())
+        {
+            var id = rows.GetString(0); var hasPortrait = rows.GetBoolean(3);
+            result.Add(HeroMapper.Map(id, rows.GetString(1), rows.IsDBNull(2) ? null : rows.GetString(2),
+                rows.IsDBNull(4) ? null : rows.GetString(4), descriptions, parameters, acquisitions, PortraitUrl(id, hasPortrait)));
+        }
         return result;
     }
+
+    private string? PortraitUrl(string id, bool hasReference) => options.Value.PortraitMode.ToLowerInvariant() switch
+    {
+        "none" => null,
+        "external" when hasReference => options.Value.PortraitPathTemplate
+            .Replace("{version}", Uri.EscapeDataString(options.Value.AssetsVersion), StringComparison.Ordinal)
+            .Replace("{id}", Uri.EscapeDataString(id), StringComparison.Ordinal),
+        "local" when hasReference && _portraitIds.Contains(id) => $"/portraits/{Uri.EscapeDataString(id)}.png",
+        _ => null,
+    };
 
     public Task<IReadOnlyList<SkillDto>> LoadSkillsAsync(string importId, string heroId) =>
         _skills.GetOrAdd((importId, heroId.ToUpperInvariant()), key =>

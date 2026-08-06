@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '10.0.x' }
+      - name: Restore, build, and test API
+        run: |
+          dotnet restore api/Cta.Api.Tests/Cta.Api.Tests.csproj
+          dotnet build api/Cta.Api.Tests/Cta.Api.Tests.csproj --configuration Release --no-restore
+          dotnet test api/Cta.Api.Tests/Cta.Api.Tests.csproj --configuration Release --no-build --no-restore
+      - name: Run importer tests
+        run: PYTHONPATH=src python3 -m unittest discover -s tests -v
+
+  frontend-ci:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/cta-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/cta-web/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_API_URL: https://api.invalid.example
+          VITE_ASSET_BASE_URL: https://assets.invalid.example
+
+  container-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create and validate synthetic public database
+        run: |
+          python3 scripts/create-synthetic-public-db.py artifacts/public/cta.sqlite
+          scripts/validate-public-artifacts.sh artifacts/public
+      - name: Build production image
+        run: docker build --tag cta-api:ci --build-arg VCS_REF=${{ github.sha }} .
+      - name: Start and smoke-test image
+        run: RELEASE_IMAGE=cta-api:ci scripts/smoke-test-image.sh

@@ -101,8 +101,42 @@ public sealed class HeroApiTests
         Assert.Contains("Ranger", filters.GetProperty("classes").EnumerateArray().Select(x => x.GetString()));
         Assert.Contains(filters.GetProperty("attributes").EnumerateArray(), x => x.GetProperty("value").GetString() == "Evade");
         Assert.Equal("ok", (await Get(client, "/health")).GetProperty("status").GetString());
+        Assert.Equal("ready", (await Get(client, "/ready")).GetProperty("status").GetString());
         await using var db = await factory.Services.GetRequiredService<SqliteConnectionFactory>().OpenAsync();
         Assert.Contains("Mode=ReadOnly", db.ConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Metadata_contains_only_configured_public_build_values()
+    {
+        using var factory = new ApiFactory();
+        var metadata = await Get(factory.CreateClient(), "/api/meta");
+        Assert.Equal("test-version", metadata.GetProperty("applicationVersion").GetString());
+        Assert.Equal("abcdef1", metadata.GetProperty("commit").GetString());
+        Assert.False(metadata.TryGetProperty("databasePath", out _));
+    }
+
+    [Fact]
+    public void Missing_production_database_fails_with_a_clear_startup_error()
+    {
+        using var factory = new ApiFactory(createDatabase: false, environment: "Production");
+        var exception = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+        Assert.Contains("Required SQLite database is missing", exception.ToString());
+    }
+
+    [Fact]
+    public async Task Production_cors_allows_only_the_configured_frontend_origin()
+    {
+        using var factory = new ApiFactory(environment: "Production");
+        var client = factory.CreateClient();
+        using var allowed = new HttpRequestMessage(HttpMethod.Get, "/health");
+        allowed.Headers.Add("Origin", "https://frontend.example.test");
+        var allowedResponse = await client.SendAsync(allowed);
+        Assert.Equal("https://frontend.example.test", allowedResponse.Headers.GetValues("Access-Control-Allow-Origin").Single());
+        using var denied = new HttpRequestMessage(HttpMethod.Get, "/health");
+        denied.Headers.Add("Origin", "http://localhost:5173");
+        var deniedResponse = await client.SendAsync(denied);
+        Assert.False(deniedResponse.Headers.Contains("Access-Control-Allow-Origin"));
     }
 
     [Fact]
@@ -134,6 +168,16 @@ public sealed class HeroApiTests
         Assert.Equal(HttpStatusCode.OK, portrait.StatusCode);
         Assert.Equal("http://localhost:5173", portrait.Headers.GetValues("Access-Control-Allow-Origin").Single());
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/portraits/Alpha.png", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task External_portrait_mode_returns_a_stable_versioned_asset_path_without_local_files()
+    {
+        using var factory = new ApiFactory("cta", portraitMode: "external");
+        factory.Seed("current", "cta", "2026-02-01", new HeroSeed("Alpha", "Alpha Hero"));
+        factory.SeedPortraitReference("current", "Alpha");
+        var hero = (await Get(factory.CreateClient(), "/api/heroes/Alpha")).GetProperty("hero");
+        Assert.Equal("heroes/test-assets/Alpha.webp", hero.GetProperty("portraitUrl").GetString());
     }
 
     [Fact]

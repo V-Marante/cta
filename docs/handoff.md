@@ -163,3 +163,6 @@ Acceptance criteria:
 5. The API contract remains compatible or any deliberate change is documented and tested; performance remains reasonable at the new fixed corpus size.
 6. Both clean-checkout and refreshed authentic-asset smoke modes pass `./scripts/verify.sh` and targeted HTTP/UI checks.
 7. Only human-written code, tests, migrations, and documentation are eligible for staging; no APK, extraction, proprietary asset, database, generated audit, or smoke output is staged.
+# Deployment handoff
+
+Production uses a static Cloudflare Pages frontend, an immutable Fly.io API image containing sanitized read-only SQLite, and optional versioned R2 portraits. Extraction remains local, and CI uses synthetic data only. See `docs/deployment.md` for the complete manual checklist, release boundary, rollback, cost controls, and proprietary-content review.

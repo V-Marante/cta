@@ -60,6 +60,8 @@ Future-session handoff: `docs/handoff.md`
 
 Hero HTTP contract: `docs/hero-api-contract.md`
 
+Production deployment and local data releases: `docs/deployment.md`
+
 Current release-readiness evidence: `reports/24-hero-library-release-readiness.md`
 
 ## Repository Data Boundary

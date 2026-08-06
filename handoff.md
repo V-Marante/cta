@@ -333,3 +333,6 @@ Treat these as useful cross-checks, not replacements for source provenance:
 ## Worktree caution
 
 The worktree contains extensive uncommitted implementation from this vertical slice. Preserve unrelated/user changes. Before any commit, inspect `git status` and staged files carefully. Never stage proprietary extracted assets, APKs, SQLite databases, generated icons, or generated reports.
+# Deployment handoff
+
+The deployable architecture and exact owner actions are documented in `docs/deployment.md`. Normal CI never extracts data or receives the production database. A local, review-gated Pattern C release builds the exact API image that is pushed and deployed.
