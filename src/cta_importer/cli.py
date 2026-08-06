@@ -8,6 +8,8 @@ from .engine import ImportEngine, ImportRequest
 from .model import Severity, VersionInfo
 from .persistence import SQLiteRepository
 from .registry import ParserRegistry
+from .registry import ValidatorRegistry
+from .cta import HeroLibraryValidator, cta_parsers
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -39,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"database ready: {args.database}")
         return 0
 
-    registry = ParserRegistry()
+    registry = ParserRegistry(cta_parsers())
     registry.load_entry_points()
     if args.command == "list-parsers":
         for parser in registry.parser_set():
@@ -55,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     with SQLiteRepository(args.database) as repository:
         repository.migrate()
-        result = ImportEngine(repository, registry).import_source(
+        result = ImportEngine(repository, registry, ValidatorRegistry([HeroLibraryValidator()])).import_source(
             ImportRequest(
                 source_root=args.source,
                 version=version,

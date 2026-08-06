@@ -50,7 +50,7 @@ The game uses the custom native `GodzilabEngine`, not Unity. Its current downloa
 
 ## Importer Infrastructure
 
-The `src/cta_importer/` package provides game-agnostic, plugin-based import infrastructure with version-aware parser dispatch, validation, structured diagnostics, checksummed SQLite migrations, idempotent source manifests, and atomic dataset persistence. Game-specific parsers are intentionally not implemented yet.
+The `src/cta_importer/` package provides game-agnostic import infrastructure plus the first CTA vertical slice: English localization, heroes, character skill references, skills, and portrait references. Imports are versioned, validated, provenance-preserving, idempotent, and atomic.
 
 Architecture: `docs/importer-architecture.md`
 
@@ -79,3 +79,40 @@ Run the core tests:
 ```bash
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
+
+## Hero library local development
+
+The commands below read the locally extracted content and generate only ignored local outputs. Replace the version values with the installed game version when it changes.
+
+1. Import the local content into SQLite:
+
+```bash
+PYTHONPATH=src python3 -m cta_importer import \
+  samples/bluestacks/shared-data/cache/content \
+  extracted/cta.sqlite \
+  --game-id com.godzilab.idlerpg \
+  --version 2.0.821
+```
+
+Warnings for incomplete localization, unresolved legacy skills, or missing portrait references are stored with the successful import. Errors such as duplicate hero IDs reject the import atomically.
+
+2. Start the read-only ASP.NET Core API from the repository root:
+
+```bash
+Database=extracted/cta.sqlite \
+  dotnet run --project api/Cta.Api --urls http://localhost:5080
+```
+
+The large `HP_<hero>` presentation artwork is deliberately ignored. The collection view uses a live assembled character rather than a standalone small portrait, so heroes currently use name-only placeholders. A future genuine small-icon set can be supplied through `HeroIconRoot`; it defaults to `generated/hero-icons`. The API never modifies the importer database.
+
+3. In another terminal, start the React application:
+
+```bash
+cd web/cta-web
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. Set `VITE_API_URL` before `npm run dev` if the API is not at `http://localhost:5080`.
+
+The roster defaults to collectible heroes and can optionally include classified variants, enemies, and NPCs. It supports job, element, rarity, mobility, acquisition, and attribute filters. The UI falls back to initials for missing portrait files, canonical names or raw IDs for missing English names, and an unavailable-description message for incomplete skill localization.

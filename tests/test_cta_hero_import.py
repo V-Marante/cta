@@ -1,0 +1,126 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from cta_importer.cta import HeroLibraryValidator, cta_parsers
+from cta_importer.engine import ImportEngine, ImportRequest
+from cta_importer.model import Severity, VersionInfo
+from cta_importer.persistence import SQLiteRepository
+from cta_importer.registry import ParserRegistry, ValidatorRegistry
+
+
+HEROES = """Name,Key,Class,Tribe,Sex,Damage Type,Elemental,Atk,HP,Def,AtkRange,AtkReload,MoveSpeed,Ctk,CtkDmg,Resistance,Evade,BaseStars,MaxStars,POW,DPS
+Ada,Ada,Ranger,Human,f,Phys,Fire,42,300,8,250,1.2,140,20,150,10,2,3,8,999,35
+Bob,Bob,Knight,Orc,m,Magic,Water,30,500,20,100,2,90,5,100,30,0,2,8,850,15
+"""
+
+PERSOS = """<?xml version="1.0"?><characters>
+  <character key="Ada" assets="AdaAsset" iconIdx="3"><skill>AdaArrow</skill><skill>GoneSkill</skill><ability>BobBlock</ability></character>
+  <character key="Bob"><skill>BobBlock</skill></character>
+</characters>"""
+
+SKILLS = """<?xml version="1.0"?><skills>
+  <skill key="AdaArrow" type="damage" name="Arrow"><spec atkPercent="2"/></skill>
+  <skill key="BobBlock" type="buff" name="Block"><info>Canonical info</info></skill>
+</skills>"""
+
+PERSOS_EN = """<?xml version="1.0"?><characters><character key="Ada" name="Ada the Swift"/></characters>"""
+SKILLS_EN = """<?xml version="1.0"?><skills><skill key="AdaArrow" name="Flame Arrow"><info>Deals fire damage.</info></skill></skills>"""
+CONFIG_EN = """<?xml version="1.0"?><config>
+  <group name="AbilityInfo"><value name="Evade">*{evade}%* chance to evade a hit</value></group>
+  <group name="SkDesc"><value name="Arrow">Fires an arrow at an enemy</value></group>
+</config>"""
+CONFIG = """<?xml version="1.0"?><config>
+  <group name="ChestTest"><value name="item" x="10" y="5">Medal_Ada</value></group>
+  <group name="ChestLegendary"><value name="item" x="10" y="5">Bob</value></group>
+  <group name="ChestHeroesPast"><value name="item" x="10" y="5">Ada</value></group>
+</config>"""
+ITEMS_EN = """<?xml version="1.0"?><items><item key="ChestTest" name="Test Chest"/><item key="ChestLegendary" name="Legendary Chest"/><item key="ChestHeroesPast" name="Past Chest"/></items>"""
+
+
+class CtaHeroImportTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.source = self.root / "content"
+        self.source.mkdir()
+        for name, value in {"Heroes.csv": HEROES, "Persos.xml": PERSOS, "Skills.xml": SKILLS,
+                            "Persos_en.xml": PERSOS_EN, "Skills_en.xml": SKILLS_EN, "Config_en.xml": CONFIG_EN,
+                            "Config.xml": CONFIG, "Items_en.xml": ITEMS_EN}.items():
+            (self.source / name).write_text(value, encoding="utf-8")
+        self.repository = SQLiteRepository(self.root / "cta.sqlite")
+        self.repository.migrate()
+
+    def tearDown(self) -> None:
+        self.repository.close()
+        self.temp.cleanup()
+
+    def test_imports_complete_hero_slice_with_provenance(self) -> None:
+        engine = ImportEngine(self.repository, ParserRegistry(cta_parsers()), ValidatorRegistry([HeroLibraryValidator()]))
+        result = engine.import_source(ImportRequest(self.source, VersionInfo("cta", "test")))
+
+        self.assertEqual("succeeded", result.status)
+        self.assertEqual(12, result.entity_count)  # plus one classification per hero
+        hero = self.repository.connection.execute(
+            "SELECT payload_json, source_path, source_record FROM entities WHERE import_id=? AND namespace='hero' AND entity_key='Ada'",
+            (result.import_id,),
+        ).fetchone()
+        self.assertIn('"attack":42', hero["payload_json"])
+        self.assertIn('"mobility":"ground"', hero["payload_json"])
+        self.assertEqual("collectible", self.repository.connection.execute(
+            "SELECT json_extract(payload_json, '$.kind') FROM entities WHERE import_id=? AND namespace='hero_classification' AND entity_key='Ada'", (result.import_id,)
+        ).fetchone()[0])
+        self.assertEqual("Heroes.csv", hero["source_path"])
+        self.assertEqual("Ada", hero["source_record"])
+        self.assertEqual(3, self.repository.connection.execute(
+            "SELECT count(*) FROM relations WHERE import_id=? AND relation='character_skill' AND source_key='Ada'", (result.import_id,)
+        ).fetchone()[0])
+        relation_kinds = [row[0] for row in self.repository.connection.execute(
+            "SELECT payload_json FROM relations WHERE import_id=? AND relation='character_skill' AND source_key='Ada' ORDER BY id", (result.import_id,)
+        )]
+        self.assertEqual(['{"kind":"skill"}', '{"kind":"skill"}', '{"kind":"ability"}'], relation_kinds)
+        self.assertEqual("Ada the Swift", self.repository.connection.execute(
+            "SELECT value FROM localizations WHERE import_id=? AND namespace='hero' AND entity_key='Ada' AND field='name'", (result.import_id,)
+        ).fetchone()[0])
+        self.assertEqual("*{evade}%* chance to evade a hit", self.repository.connection.execute(
+            "SELECT value FROM localizations WHERE import_id=? AND namespace='ability' AND entity_key='Evade'", (result.import_id,)
+        ).fetchone()[0])
+        self.assertEqual("Test Chest", self.repository.connection.execute(
+            "SELECT value FROM localizations WHERE import_id=? AND namespace='acquisition_source' AND entity_key='ChestTest'", (result.import_id,)
+        ).fetchone()[0])
+        self.assertEqual(2, self.repository.connection.execute(
+            "SELECT count(*) FROM relations WHERE import_id=? AND relation='hero_acquisition' AND source_key='Ada'", (result.import_id,)
+        ).fetchone()[0])
+        self.assertEqual(1, self.repository.connection.execute(
+            "SELECT count(*) FROM relations WHERE import_id=? AND relation='hero_acquisition' AND source_key='Bob' AND target_key='ChestLegendary'", (result.import_id,)
+        ).fetchone()[0])
+        past = self.repository.connection.execute(
+            "SELECT payload_json FROM relations WHERE import_id=? AND relation='hero_acquisition' AND source_key='Ada' AND target_key='ChestHeroesPast'", (result.import_id,)
+        ).fetchone()[0]
+        self.assertIn('"current":false', past)
+        codes = {row[0] for row in self.repository.connection.execute("SELECT code FROM diagnostics WHERE import_id=?", (result.import_id,))}
+        self.assertIn("unresolved_skill_reference", codes)
+        self.assertIn("missing_portrait_reference", codes)
+        self.assertIn("missing_localization_key", codes)
+
+    def test_expanded_parser_versions_invalidate_older_imports(self) -> None:
+        versions = {parser.descriptor.parser_id: parser.descriptor.parser_version for parser in cta_parsers()}
+        self.assertEqual("1.3.0", versions["cta.heroes"])
+        self.assertEqual("1.3.0", versions["cta.localization.en"])
+        self.assertEqual("1.3.0", versions["cta.characters"])
+        self.assertEqual("1.1.0", versions["cta.hero_acquisition"])
+
+    def test_duplicate_hero_ids_are_rejected(self) -> None:
+        with (self.source / "Heroes.csv").open("a", encoding="utf-8") as stream:
+            stream.write(HEROES.splitlines()[1] + "\n")
+        result = ImportEngine(self.repository, ParserRegistry(cta_parsers()), ValidatorRegistry([HeroLibraryValidator()])).import_source(
+            ImportRequest(self.source, VersionInfo("cta", "duplicate"), fail_on=Severity.ERROR)
+        )
+        self.assertEqual("rejected", result.status)
+        self.assertIn("duplicate_hero_id", {item.code for item in result.diagnostics})
+
+
+if __name__ == "__main__":
+    unittest.main()

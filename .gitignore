@@ -16,6 +16,10 @@ venv/
 env/
 build/
 dist/
+bin/
+obj/
+node_modules/
+*.tsbuildinfo
 *.egg-info/
 
 # Editors and operating systems
@@ -79,6 +83,7 @@ inventories/
 reports/*.json
 reports/*.txt
 reports/generated/
+generated/
 
 # Local configuration
 .env
