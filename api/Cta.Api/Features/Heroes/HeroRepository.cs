@@ -11,9 +11,6 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
 {
     private readonly ConcurrentDictionary<string, Lazy<Task<IReadOnlyList<HeroSummary>>>> _heroes = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<(string ImportId, string HeroId), Lazy<Task<IReadOnlyList<SkillDto>>>> _skills = new();
-    private readonly HashSet<string> _bundledPortraitIds = Directory.Exists(paths.BundledHeroIconRoot)
-        ? Directory.EnumerateFiles(paths.BundledHeroIconRoot, "*.png").Select(Path.GetFileNameWithoutExtension).Where(x => x is not null).Select(x => x!).ToHashSet(StringComparer.OrdinalIgnoreCase)
-        : new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _portraitIds = Directory.Exists(paths.HeroIconRoot)
         ? Directory.EnumerateFiles(paths.HeroIconRoot, "*.png").Select(Path.GetFileNameWithoutExtension).Where(x => x is not null).Select(x => x!).ToHashSet(StringComparer.OrdinalIgnoreCase)
         : new(StringComparer.OrdinalIgnoreCase);
@@ -49,13 +46,18 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
         return result;
     }
 
-    private string? PortraitUrl(string id, bool hasReference) => options.Value.PortraitMode.ToLowerInvariant() switch
+    private string? PortraitUrl(string id, bool hasReference)
     {
-        "none" => null,
-        "bundled" when _bundledPortraitIds.Contains(id) => $"/assets/heroes/{Uri.EscapeDataString(options.Value.AssetsVersion)}/{Uri.EscapeDataString(id)}.png",
-        "local" when hasReference && _portraitIds.Contains(id) => $"/portraits/{Uri.EscapeDataString(id)}.png",
-        _ => null,
-    };
+        var mode = options.Value.PortraitMode.ToLowerInvariant();
+        if (mode == "none") return null;
+        if (mode == "local")
+            return hasReference && _portraitIds.Contains(id) ? $"/portraits/{Uri.EscapeDataString(id)}.png" : null;
+
+        // Production assets are packaged into the image. Treat bundled assets as
+        // authoritative even if an older Fly environment value still says
+        // "external" or another pre-unification mode.
+        return $"/assets/heroes/{Uri.EscapeDataString(options.Value.AssetsVersion)}/{Uri.EscapeDataString(id)}.png";
+    }
 
     public Task<IReadOnlyList<SkillDto>> LoadSkillsAsync(string importId, string heroId) =>
         _skills.GetOrAdd((importId, heroId.ToUpperInvariant()), key =>

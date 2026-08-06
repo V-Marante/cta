@@ -193,6 +193,15 @@ public sealed class HeroApiTests
     }
 
     [Fact]
+    public async Task Legacy_external_portrait_mode_still_uses_the_packaged_same_origin_asset()
+    {
+        using var factory = new ApiFactory("cta", portraitMode: "external");
+        factory.Seed("current", "cta", "2026-02-01", new HeroSeed("Alpha", "Alpha Hero"));
+        var hero = (await Get(factory.CreateClient(), "/api/heroes/Alpha")).GetProperty("hero");
+        Assert.Equal("/assets/heroes/test-assets/Alpha.png", hero.GetProperty("portraitUrl").GetString());
+    }
+
+    [Fact]
     public async Task Non_playable_classifications_are_omitted_from_all_hero_endpoints()
     {
         using var factory = new ApiFactory("cta");
