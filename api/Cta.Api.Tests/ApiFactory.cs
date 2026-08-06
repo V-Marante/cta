@@ -46,8 +46,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         {
             var payload = JsonSerializer.Serialize(new { canonical_name = hero.Name, @class = hero.Class, tribe = hero.Tribe,
                 element = hero.Element, damage_type = hero.DamageType, sex = "f", mobility = hero.Mobility,
-                traits = new[] { hero.Attribute }, stats = new { attack = 42 }, passive = new { },
-                progression = new { rarity_name = hero.Rarity }, availability = new { }, raw = new { } });
+                traits = new[] { hero.Attribute }, stats = new { attack = 42, critical_chance = 0, power = 999 },
+                stat_semantics = new { attack = new { value = 42, status = "source_defined", source_field = "Atk", label = "ATK", meaning = "base_attack_damage", unit = "points" }, power = new { value = 999, status = "unresolved", source_field = "POW", label = "Raw POW", meaning = (string?)null, unit = "source_score" } },
+                source_calculations = new { factor_per_star = new { value = (double?)null, status = "unresolved", source_field = "Factor per Star", meaning = (string?)null } }, passive = new { },
+                progression = new { base_stars = 3, max_stars = 8, rarity_name = hero.Rarity },
+                progression_semantics = new { base_stars = new { value = 3, status = "unresolved", source_field = "BaseStars", meaning = (string?)null } },
+                availability = new { shop = true }, legacy_availability = new { shop = new { value = true, status = "legacy_unverified", source_field = "Shop", source_path = "Heroes.csv" } }, raw = new { } });
             Entity(db, importId, "hero", hero.Id, payload);
             Entity(db, importId, "hero_classification", hero.Id, JsonSerializer.Serialize(new { kind = hero.Classification, owner_id = (string?)null }));
             Localize(db, importId, "hero", hero.Id, "name", hero.Name);
@@ -63,8 +67,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public void SeedSkill(string importId, string heroId)
     {
         using var db = Open();
-        Entity(db, importId, "skill", "TestSkill", "{\"canonical_name\":\"Fallback Skill\",\"type\":\"damage\",\"attributes\":{},\"components\":[{\"kind\":\"info\",\"attributes\":{},\"text\":\"SkDesc_Test\"}]}");
-        Localize(db, importId, "skill_description", "Test", "description", "Fallback description");
+        Entity(db, importId, "skill", "TestSkill", "{\"canonical_name\":\"Fallback Skill\",\"type\":\"damage\",\"attributes\":{},\"components\":[{\"kind\":\"info\",\"attributes\":{},\"attribute_semantics\":{},\"text\":\"SkDesc_Test\"},{\"kind\":\"spec\",\"attributes\":{\"time\":\"5\",\"cooldown\":\"0\"},\"attribute_semantics\":{\"cooldown\":{\"raw_value\":\"0\",\"value\":0,\"display_value\":0,\"status\":\"strongly_supported\",\"meaning\":\"duration\",\"unit\":\"seconds\",\"source_attribute\":\"cooldown\"}},\"text\":null}]}");
+        Localize(db, importId, "skill_description", "Test", "description", "Works for {duration}.");
         Execute(db, "INSERT INTO relations(import_id,relation,source_key,target_key,ordinal,payload_json) VALUES($i,'character_skill',$h,'TestSkill',0,'{\"kind\":\"skill\"}')", ("$i", importId), ("$h", heroId));
     }
 
@@ -81,7 +85,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
           CREATE TABLE import_runs(id TEXT PRIMARY KEY,game_id TEXT,status TEXT,finished_at TEXT);
           CREATE TABLE entities(import_id TEXT,namespace TEXT,entity_key TEXT,payload_json TEXT);
           CREATE TABLE localizations(import_id TEXT,namespace TEXT,entity_key TEXT,locale TEXT,field TEXT,value TEXT);
-          CREATE TABLE relations(import_id TEXT,relation TEXT,source_key TEXT,target_key TEXT,ordinal INTEGER,payload_json TEXT);
+          CREATE TABLE relations(import_id TEXT,relation TEXT,source_key TEXT,target_key TEXT,ordinal INTEGER,payload_json TEXT,source_path TEXT,source_record TEXT);
           """);
     }
     private SqliteConnection Open() { var db = new SqliteConnection($"Data Source={Database}"); db.Open(); return db; }

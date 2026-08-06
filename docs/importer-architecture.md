@@ -165,3 +165,13 @@ PYTHONPATH=src python3 -m cta_importer import \
 ```
 
 CTA-specific concepts remain under `cta_importer.cta`; the generic kernel does not encode them.
+
+Hero semantic normalization is additive within entity/relation JSON. Progression facts carry a semantic status and original field; explicit acquisition relations carry current/historical status and Config provenance; nullable legacy availability remains separate and never synthesizes an acquisition relation. This needs no relational migration because the generic persistence schema already stores versioned payloads and source locations.
+
+Hero stat facts follow the same additive pattern. `stat_semantics` carries value, status, source field, label, meaning, and unit. Sparse spreadsheet/editor calculations remain separately preserved under `source_calculations`; they are not normalized into runtime combat values. DPS is marked supported only when its persisted value matches the established half-up `Atk / AtkReload` relation.
+
+Skill components preserve ordered raw tags, attribute strings, and text. Additive `attribute_semantics` classifies only context-proven probabilities, durations, counts, health fractions, and internal radii. The API retains localization templates and reports resolved parameters plus unresolved placeholders; generic effect values receive no global conversion.
+
+CTA localization markup is not rewritten in persistence. The frontend tokenizes the raw projected string into accessible emphasis, icon labels, line breaks, and explicit unresolved-format markers. This keeps storage/source provenance lossless and makes rendering behavior independently testable.
+
+The read-only API is a downstream projection, not part of the importer kernel. Its public shape and naming boundary are documented in `docs/hero-api-contract.md`. Mapped heroes are cached by immutable import ID and ordered skills by import/hero; selecting a newer successful import therefore uses a distinct cache entry without weakening import immutability or transaction behavior. Filtering remains in memory because the current fixed public corpus is 116 heroes.

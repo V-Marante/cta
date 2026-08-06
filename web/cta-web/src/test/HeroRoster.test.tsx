@@ -14,10 +14,13 @@ describe('HeroRoster', () => {
     mockFetch(); render(<HeroRoster />)
     expect(screen.getByRole('status')).toHaveTextContent('Loading heroes')
     expect(await screen.findByRole('heading', { name: 'Ada Hero' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Hero filters' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Search heroes' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Hero roster' })).toBeInTheDocument()
   })
   it('shows empty state', async () => {
     mockFetch([]); render(<HeroRoster />)
-    expect(await screen.findByText('No heroes match those filters.')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No heroes match those filters.'))
   })
   it('shows failed request and retries', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch'); fetch.mockImplementationOnce(() => response(filters)).mockRejectedValueOnce(new Error('offline')).mockImplementation(url => String(url).includes('/filters') ? response(filters) : response({ items: [hero], total: 1, page: 1, pageSize: 250 }))

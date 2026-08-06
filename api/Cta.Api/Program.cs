@@ -24,7 +24,7 @@ if (Directory.Exists(paths.UiIconRoot))
     app.UseStaticFiles(new StaticFileOptions { FileProvider = new PhysicalFileProvider(paths.UiIconRoot), RequestPath = "/ui-icons" });
 
 app.MapHeroEndpoints();
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/health", () => Results.Ok(new HealthResponse("ok"))).WithName("Health").Produces<HealthResponse>();
 app.Run();
 
 public partial class Program { }

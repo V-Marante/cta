@@ -23,19 +23,15 @@ public static class HeroMapper
         var traitDtos = traits.Select(code => new TraitDto(code, Humanize(code),
             FormatDescription(code, descriptions.GetValueOrDefault(code), parameters.GetValueOrDefault(id)))).ToArray();
         var heroAcquisition = acquisitions.GetValueOrDefault(id)?.ToList() ?? [];
-        if (!heroAcquisition.Any(x => x.Current))
-        {
-            if (IsFlag(RawText("Dungeon"))) heroAcquisition.Add(new("Dungeon", "Dungeon", "game-mode", null, true));
-            if (IsFlag(RawText("Shop"))) heroAcquisition.Add(new("Shop", "Shop", "shop", null, true));
-            if (IsFlag(RawText("Event"))) heroAcquisition.Add(new("Event", "Event", "event", null, true));
-            if (IsFlag(RawText("ChestEpic"))) heroAcquisition.Add(new("ChestHeroesEpic", "Epic Chest", "chest", null, true));
-        }
         return new(id, localizedName ?? canonical ?? id, Text("class"), Text("tribe"), Text("element"), Text("damage_type"),
             Text("sex"), Text("mobility") ?? (IsFlag(RawText("Flying")) ? "flying" : "ground"), traitDtos,
             hasPortrait && portraitIds.Contains(id) ? $"/portraits/{Uri.EscapeDataString(id)}.png" : null,
-            ObjectOrEmpty(root, "stats"), root.TryGetProperty("passive", out var passive) ? passive.Clone() : JsonSerializer.SerializeToElement(new { code = RawText("SP4"), target = RawText("SP4 Target"), source_value = Scalar(RawText("SP4 Value")) }),
+            ObjectOrEmpty(root, "stats"), ObjectOrEmpty(root, "stat_semantics"), ObjectOrEmpty(root, "source_calculations"),
+            root.TryGetProperty("passive", out var passive) ? passive.Clone() : JsonSerializer.SerializeToElement(new { code = RawText("SP4"), target = RawText("SP4 Target"), source_value = Scalar(RawText("SP4 Value")) }),
             root.TryGetProperty("progression", out var progression) ? progression.Clone() : JsonSerializer.SerializeToElement(new { base_stars = Scalar(RawText("BaseStars")), max_stars = Scalar(RawText("MaxStars")), rarity = Scalar(RawText("Rarity")), rarity_name = RarityName(RawText("Rarity")), factor_per_star = Scalar(RawText("Factor per Star")) }),
+            root.TryGetProperty("progression_semantics", out var progressionSemantics) ? progressionSemantics.Clone() : ProgressionSemantics(RawText),
             root.TryGetProperty("availability", out var availability) ? availability.Clone() : JsonSerializer.SerializeToElement(new { dungeon = Flag(RawText("Dungeon")), shop = Flag(RawText("Shop")), event_available = Flag(RawText("Event")), epic_chest = Flag(RawText("ChestEpic")) }),
+            root.TryGetProperty("legacy_availability", out var legacyAvailability) ? legacyAvailability.Clone() : LegacyAvailability(RawText),
             heroAcquisition, GetString(classification.RootElement, "kind") ?? "collectible",
             GetString(classification.RootElement, "owner_id"), canonical, raw);
     }
@@ -60,4 +56,20 @@ public static class HeroMapper
     private static bool? Flag(string? value) => value is null ? null : IsFlag(value);
     private static object? Scalar(string? value) => value is null ? null : long.TryParse(value, out var integer) ? integer : double.TryParse(value, CultureInfo.InvariantCulture, out var number) ? number : value;
     private static string? RarityName(string? value) => value switch { "1" => "Common", "2" => "Rare", "3" => "Epic", "4" => "Legendary", _ => null };
+    private static JsonElement ProgressionSemantics(Func<string, string?> raw)
+    {
+        var maximum = raw("MaxStars"); var rarity = raw("Rarity"); var rarityName = RarityName(rarity);
+        return JsonSerializer.SerializeToElement(new
+        {
+            base_stars = new { value = Scalar(raw("BaseStars")), status = "unresolved", source_field = "BaseStars", meaning = (string?)null },
+            max_stars = new { value = Scalar(maximum), status = maximum == "8" ? "strongly_supported" : "unresolved", source_field = "MaxStars", meaning = maximum == "8" ? "hero_evolution_cap" : null },
+            rarity = new { value = Scalar(rarity), status = rarityName is null ? "unresolved" : "source_defined", source_field = "Rarity", meaning = rarityName is null ? null : "hero_rarity_tier", name = rarityName },
+        });
+    }
+    private static JsonElement LegacyAvailability(Func<string, string?> raw) => JsonSerializer.SerializeToElement(new
+    {
+        dungeon = Legacy(raw("Dungeon"), "Dungeon"), shop = Legacy(raw("Shop"), "Shop"),
+        @event = Legacy(raw("Event"), "Event"), epic_chest = Legacy(raw("ChestEpic"), "ChestEpic")
+    });
+    private static object Legacy(string? raw, string field) => new { value = Flag(raw), status = "legacy_unverified", source_field = field, source_path = "Heroes.csv" };
 }

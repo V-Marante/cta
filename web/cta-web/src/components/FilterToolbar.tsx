@@ -1,7 +1,7 @@
 import type { Filters, HeroQuery } from '../models'
 
 export function FilterToolbar({ filters, query, update }: { filters: Filters; query: HeroQuery; update: (value: Partial<HeroQuery>) => void }) {
-  return <section className="toolbar"><label className="search">⌕<input value={query.search} onChange={e => update({ search: e.target.value })} placeholder="Search heroes…" /></label>
+  return <section className="toolbar" aria-label="Hero filters"><label className="search"><span aria-hidden="true">⌕</span><input aria-label="Search heroes" value={query.search} onChange={e => update({ search: e.target.value })} placeholder="Search heroes…" /></label>
     <Select label="Filter by class" value={query.heroClass} empty="All classes" options={filters.classes} change={heroClass => update({ heroClass })} />
     <Select label="Filter by element" value={query.element} empty="All elements" options={filters.elements} change={element => update({ element })} />
     <Select label="Filter by rarity" value={query.rarity} empty="All rarities" options={filters.rarities} change={rarity => update({ rarity })} />

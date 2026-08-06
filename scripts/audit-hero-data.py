@@ -54,6 +54,7 @@ def main() -> int:
     parser.add_argument("database", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--game-id", default="com.godzilab.idlerpg")
+    parser.add_argument("--hero-icon-root", type=Path, help="Optional ignored local/proprietary hero-icon directory")
     args = parser.parse_args()
 
     db = sqlite3.connect(args.database)
@@ -123,7 +124,7 @@ def main() -> int:
     count_by_issue: Counter[str] = Counter()
     rows: list[tuple[str, str, str, str, str]] = []
     classification_review: list[str] = []
-    complete_except_icon = 0
+    complete = 0
     for hero_id in collectible_ids:
         hero = heroes[hero_id]
         issues: list[str] = []
@@ -186,13 +187,13 @@ def main() -> int:
             count_by_issue["Missing spell description"] += len(missing_descriptions)
 
         if not issues:
-            complete_except_icon += 1
+            complete += 1
         rows.append((
             hero.get("canonical_name") or hero_id,
             hero_id,
             str(len(resolved)),
             str(acquisition_count),
-            "; ".join(issues) if issues else "None besides small icon",
+            "; ".join(issues) if issues else "None",
         ))
 
     diagnostics = list(
@@ -203,6 +204,9 @@ def main() -> int:
         )
     )
     warning_count = sum(count for severity, _, count in diagnostics if severity in {"warning", "error", "fatal"})
+    icon_ids = ({path.stem.lower() for path in args.hero_icon_root.glob("*.png")}
+                if args.hero_icon_root and args.hero_icon_root.is_dir() else None)
+    icon_coverage = (sum(hero_id.lower() in icon_ids for hero_id in collectible_ids) if icon_ids is not None else None)
     lines = [
         "# Hero import completeness audit",
         "",
@@ -213,10 +217,13 @@ def main() -> int:
         "",
         f"- Collectible heroes audited: **{len(collectible_ids)}**",
         "- Classification counts: " + ", ".join(f"`{kind}` **{count}**" for kind, count in sorted(classification_counts.items())) + ".",
-        f"- Heroes complete except for a static small icon: **{complete_except_icon}**",
-        f"- Heroes with one or more additional gaps: **{len(collectible_ids) - complete_except_icon}**",
+        f"- Heroes with no additional structured-data gaps: **{complete}**",
+        f"- Heroes with one or more structured-data gaps: **{len(collectible_ids) - complete}**",
         f"- Importer warning/error diagnostics: **{warning_count}**",
-        f"- Imported static small hero icons: **0/{len(collectible_ids)}**. Suitable 162×162 `GMI_<element>_<index>` frames exist in the APK but are not yet extracted or connected to heroes.",
+        (f"- Ignored local authentic hero-icon coverage: **{icon_coverage}/{len(collectible_ids)}** under `{args.hero_icon_root}`. "
+         "These proprietary files are runtime assets, not persisted importer records."
+         if icon_coverage is not None else
+         "- Ignored local authentic hero-icon coverage: **not evaluated** (pass `--hero-icon-root local/proprietary/hero-icons`)."),
         f"- Classification review candidates: **{len(classification_review)}** records are marked collectible but have no acquisition or legacy availability source.",
         "",
         "Zero is treated as a present numeric value. Canonical source names are considered usable fallbacks but missing English localization is still reported. Skill descriptions embedded in skill components count as present.",
@@ -241,7 +248,7 @@ def main() -> int:
         "",
         "## Per-hero gaps",
         "",
-        "Every hero also lacks an imported static small icon; that repeated item is omitted from individual rows.",
+        "Proprietary portrait availability is reported separately from structured importer completeness.",
         "",
         "| Hero | Raw ID | Resolved spells | Acquisition sources | Missing data |",
         "|---|---|---:|---:|---|",

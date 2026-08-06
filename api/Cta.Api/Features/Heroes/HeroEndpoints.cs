@@ -6,10 +6,10 @@ public static class HeroEndpoints
 {
     public static IEndpointRouteBuilder MapHeroEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/heroes", List);
-        app.MapGet("/api/heroes/filters", Filters);
-        app.MapGet("/api/heroes/{id}", Detail);
-        app.MapGet("/api/heroes/{id}/skills", Skills);
+        app.MapGet("/api/heroes", List).WithName("ListHeroes").Produces<HeroPage>();
+        app.MapGet("/api/heroes/filters", Filters).WithName("GetHeroFilters").Produces<HeroFilters>();
+        app.MapGet("/api/heroes/{id}", Detail).WithName("GetHero").Produces<HeroDetail>().Produces(StatusCodes.Status404NotFound);
+        app.MapGet("/api/heroes/{id}/skills", Skills).WithName("GetHeroSkills").Produces<IReadOnlyList<SkillDto>>().Produces(StatusCodes.Status404NotFound);
         return app;
     }
 

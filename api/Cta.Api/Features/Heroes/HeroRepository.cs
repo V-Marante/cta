@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Collections.Concurrent;
 using Cta.Api.Configuration;
 using Cta.Api.Data;
 
@@ -6,13 +8,18 @@ namespace Cta.Api.Features.Heroes;
 
 public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSelector imports, RepositoryPaths paths)
 {
+    private readonly ConcurrentDictionary<string, Lazy<Task<IReadOnlyList<HeroSummary>>>> _heroes = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<(string ImportId, string HeroId), Lazy<Task<IReadOnlyList<SkillDto>>>> _skills = new();
     private readonly HashSet<string> _portraitIds = Directory.Exists(paths.HeroIconRoot)
         ? Directory.EnumerateFiles(paths.HeroIconRoot, "*.png").Select(Path.GetFileNameWithoutExtension).Where(x => x is not null).Select(x => x!).ToHashSet(StringComparer.OrdinalIgnoreCase)
         : new(StringComparer.OrdinalIgnoreCase);
 
     public Task<string?> LatestImportAsync() => imports.LatestSuccessfulAsync();
 
-    public async Task<List<HeroSummary>> LoadHeroesAsync(string importId)
+    public Task<IReadOnlyList<HeroSummary>> LoadHeroesAsync(string importId) =>
+        _heroes.GetOrAdd(importId, key => new(() => ReadHeroesAsync(key), LazyThreadSafetyMode.ExecutionAndPublication)).Value;
+
+    private async Task<IReadOnlyList<HeroSummary>> ReadHeroesAsync(string importId)
     {
         await using var db = await connections.OpenAsync();
         var descriptions = await LocalizationMap(db, importId, "ability", "description");
@@ -34,7 +41,11 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
         return result;
     }
 
-    public async Task<List<SkillDto>> LoadSkillsAsync(string importId, string heroId)
+    public Task<IReadOnlyList<SkillDto>> LoadSkillsAsync(string importId, string heroId) =>
+        _skills.GetOrAdd((importId, heroId.ToUpperInvariant()), key =>
+            new(() => ReadSkillsAsync(key.ImportId, heroId), LazyThreadSafetyMode.ExecutionAndPublication)).Value;
+
+    private async Task<IReadOnlyList<SkillDto>> ReadSkillsAsync(string importId, string heroId)
     {
         await using var db = await connections.OpenAsync();
         var descriptions = await LocalizationMap(db, importId, "skill_description", "description");
@@ -59,7 +70,9 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
                 var reference = HeroMapper.GetString(parts.EnumerateArray().FirstOrDefault(x => HeroMapper.GetString(x, "kind") == "info"), "text");
                 description = reference?.StartsWith("SkDesc_", StringComparison.Ordinal) == true ? descriptions.GetValueOrDefault(reference[7..]) : reference;
             }
-            result.Add(new(rows.GetString(0), rows.IsDBNull(2) ? canonical ?? HeroMapper.Humanize(rows.GetString(0)) : rows.GetString(2), description,
+            var resolved = ResolveDescription(description, root.GetProperty("components"));
+            result.Add(new(rows.GetString(0), rows.IsDBNull(2) ? canonical ?? HeroMapper.Humanize(rows.GetString(0)) : rows.GetString(2), resolved.Text,
+                description, JsonSerializer.SerializeToElement(resolved.Parameters), resolved.Unresolved,
                 HeroMapper.GetString(root, "type"), root.GetProperty("components").Clone(), root.GetProperty("attributes").Clone()));
         }
         return result;
@@ -88,14 +101,50 @@ public sealed class HeroRepository(SqliteConnectionFactory connections, ImportSe
         await using var command = db.CreateCommand(); command.CommandText = """
           SELECT r.source_key,r.target_key,r.payload_json,
             coalesce(l.value,json_extract(a.payload_json,'$.name'),r.target_key),
-            coalesce(json_extract(a.payload_json,'$.kind'),'chest')
+            coalesce(json_extract(a.payload_json,'$.kind'),'chest'), r.source_path, r.source_record
           FROM relations r
           LEFT JOIN localizations l ON l.import_id=r.import_id AND l.namespace='acquisition_source' AND l.entity_key=r.target_key AND l.locale='en' AND l.field='name'
           LEFT JOIN entities a ON a.import_id=r.import_id AND a.namespace='acquisition_source' AND a.entity_key=r.target_key
           WHERE r.import_id=$import AND r.relation='hero_acquisition'
           """; command.Parameters.AddWithValue("$import", importId);
         var result = new Dictionary<string, List<AcquisitionDto>>(StringComparer.OrdinalIgnoreCase);
-        await using var rows = await command.ExecuteReaderAsync(); while (await rows.ReadAsync()) { using var json = JsonDocument.Parse(rows.GetString(2)); if (!result.TryGetValue(rows.GetString(0), out var sources)) result[rows.GetString(0)] = sources = []; sources.Add(new(rows.GetString(1), rows.GetString(3), rows.GetString(4), HeroMapper.GetString(json.RootElement, "medal_id"), !json.RootElement.TryGetProperty("current", out var current) || current.ValueKind != JsonValueKind.False)); }
+        await using var rows = await command.ExecuteReaderAsync(); while (await rows.ReadAsync()) { using var json = JsonDocument.Parse(rows.GetString(2)); if (!result.TryGetValue(rows.GetString(0), out var sources)) result[rows.GetString(0)] = sources = []; var currentValue = !json.RootElement.TryGetProperty("current", out var current) || current.ValueKind != JsonValueKind.False; sources.Add(new(rows.GetString(1), rows.GetString(3), rows.GetString(4), HeroMapper.GetString(json.RootElement, "medal_id"), currentValue, HeroMapper.GetString(json.RootElement, "evidence_type") ?? "explicit_configuration", HeroMapper.GetString(json.RootElement, "status") ?? (currentValue ? "current" : "historical"), HeroMapper.GetString(json.RootElement, "source_path") ?? (rows.IsDBNull(5) ? null : rows.GetString(5)), HeroMapper.GetString(json.RootElement, "source_record") ?? (rows.IsDBNull(6) ? null : rows.GetString(6)))); }
         return result;
     }
+
+    private static DescriptionResolution ResolveDescription(string? template, JsonElement components)
+    {
+        if (template is null) return new(null, new(), []);
+        var parts = components.EnumerateArray().ToArray();
+        string? Attribute(string kind, string name) => parts.Where(x => HeroMapper.GetString(x, "kind") == kind)
+            .Select(x => x.TryGetProperty("attributes", out var attributes) ? HeroMapper.GetString(attributes, name) : null)
+            .FirstOrDefault(x => x is not null);
+        string? Effect(string type, string name) => parts.Where(x => HeroMapper.GetString(x, "kind") == "effect")
+            .Where(x => x.TryGetProperty("attributes", out var attributes) && HeroMapper.GetString(attributes, "type") == type)
+            .Select(x => HeroMapper.GetString(x.GetProperty("attributes"), name)).FirstOrDefault(x => x is not null);
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        void Add(string key, string? value, string? suffix = null) { if (value is not null) values[key] = value + suffix; }
+        var durationCandidates = new[] { Attribute("effect", "duration"), Attribute("spec", "time"), Attribute("spec", "effectDuration") }
+            .Where(x => x is not null).Distinct().ToArray();
+        if (durationCandidates.Length == 1) Add("duration", durationCandidates[0], " seconds");
+        Add("durationEffect", Attribute("effect", "duration"), " seconds");
+        Add("chance", Percentage(Attribute("spec", "chance")));
+        Add("hpPercent", Percentage(Attribute("spec", "hpPercent")));
+        Add("healthRegen", Percentage(Effect("healthRegen", "value")));
+        Add("dodge", Effect("dodge", "value"));
+        Add("numProjectiles", Attribute("spec", "count"));
+        var hitCount = parts.Count(x => HeroMapper.GetString(x, "kind") == "hit"); if (hitCount > 0) values["hits"] = hitCount.ToString();
+        var effectType = Attribute("effect", "type"); if (effectType is not null && effectType != "random") values["effect"] = HeroMapper.Humanize(effectType);
+        var effectValue = Attribute("spec", "effectValue");
+        if (effectValue is not null && double.TryParse(effectValue, System.Globalization.CultureInfo.InvariantCulture, out var effectNumber) && effectNumber is >= 0 and <= 1)
+            values["effectValue"] = (effectNumber * 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        var placeholders = Regex.Matches(template, "\\{([A-Za-z][A-Za-z0-9]*)\\}").Select(x => x.Groups[1].Value).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        foreach (var key in values.Keys.Where(key => !placeholders.Contains(key, StringComparer.OrdinalIgnoreCase)).ToArray()) values.Remove(key);
+        var text = template; foreach (var (key, value) in values) text = text.Replace($"{{{key}}}", value, StringComparison.OrdinalIgnoreCase);
+        return new(text, values, placeholders.Where(x => !values.ContainsKey(x) && !x.Equals("element", StringComparison.OrdinalIgnoreCase)).ToArray());
+    }
+
+    private static string? Percentage(string? raw) => double.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture, out var value)
+        ? (value * 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : null;
+    private sealed record DescriptionResolution(string? Text, Dictionary<string, string> Parameters, IReadOnlyList<string> Unresolved);
 }

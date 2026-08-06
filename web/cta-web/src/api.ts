@@ -1,6 +1,8 @@
 import type { Filters, HeroDetailModel, HeroPage, HeroQuery } from './models'
 
-export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5080'
+// Development uses Vite's same-origin proxy. Besides simplifying API calls, this
+// keeps portrait pixels readable by the tier-list export canvas.
+export const API_URL = import.meta.env.VITE_API_URL ?? ''
 
 async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, { signal })

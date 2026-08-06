@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 
 from cta_importer.cta import HeroLibraryValidator, cta_parsers
-from cta_importer.cta.heroes import passive
+from cta_importer.cta.heroes import passive, progression_semantics, stat_semantics
+from cta_importer.cta.skills import attribute_semantics
 from cta_importer.cta.portraits import portrait_reference
 from cta_importer.engine import ImportEngine, ImportRequest
 from cta_importer.model import Severity, VersionInfo
@@ -121,10 +122,11 @@ class CtaHeroImportTests(unittest.TestCase):
 
     def test_expanded_parser_versions_invalidate_older_imports(self) -> None:
         versions = {parser.descriptor.parser_id: parser.descriptor.parser_version for parser in cta_parsers()}
-        self.assertEqual("1.5.0", versions["cta.heroes"])
+        self.assertEqual("1.8.0", versions["cta.heroes"])
         self.assertEqual("1.3.0", versions["cta.localization.en"])
         self.assertEqual("1.5.0", versions["cta.characters"])
-        self.assertEqual("1.3.1", versions["cta.hero_acquisition"])
+        self.assertEqual("1.1.0", versions["cta.skills"])
+        self.assertEqual("1.4.0", versions["cta.hero_acquisition"])
 
     def test_internal_fighter_class_maps_to_player_facing_brawler(self) -> None:
         (self.source / "Heroes.csv").write_text(HEROES.replace("Ranger,Human", "Fighter,Human", 1), encoding="utf-8")
@@ -138,6 +140,41 @@ class CtaHeroImportTests(unittest.TestCase):
         self.assertIn('"source_class":"Fighter"', payload)
         self.assertIn('"base_stars":3', payload)
         self.assertIn('"max_stars":8', payload)
+        self.assertIn('"status":"unresolved"', payload)
+        self.assertIn('"meaning":"hero_evolution_cap"', payload)
+        self.assertIn('"status":"legacy_unverified"', payload)
+
+    def test_progression_semantics_are_only_emitted_when_supported(self) -> None:
+        facts = progression_semantics(1, 7, 9)
+        self.assertEqual("unresolved", facts["base_stars"]["status"])
+        self.assertEqual("unresolved", facts["max_stars"]["status"])
+        self.assertIsNone(facts["max_stars"]["meaning"])
+        self.assertEqual("unresolved", facts["rarity"]["status"])
+
+    def test_stat_units_zero_null_and_derived_dps_rules(self) -> None:
+        facts = stat_semantics({"Atk": "50", "AtkReload": "1.2", "DPS": "42", "Ctk": "0", "Evade": "", "POW": "999"})
+        self.assertEqual((0, "percent", "source_defined"), (facts["critical_chance"]["value"], facts["critical_chance"]["unit"], facts["critical_chance"]["status"]))
+        self.assertIsNone(facts["evade"]["value"])
+        self.assertEqual("unresolved", facts["evade"]["status"])
+        self.assertEqual("strongly_supported", facts["dps"]["status"])
+        self.assertEqual("unresolved", facts["power"]["status"])
+        self.assertEqual("unresolved", stat_semantics({"Atk": "50", "AtkReload": "1.2", "DPS": "99"})["dps"]["status"])
+
+    def test_null_legacy_availability_is_preserved_and_explicit_evidence_has_provenance(self) -> None:
+        result = ImportEngine(self.repository, ParserRegistry(cta_parsers()), ValidatorRegistry([HeroLibraryValidator()])).import_source(
+            ImportRequest(self.source, VersionInfo("cta", "semantics"))
+        )
+        hero = self.repository.connection.execute(
+            "SELECT payload_json FROM entities WHERE import_id=? AND namespace='hero' AND entity_key='Ada'", (result.import_id,)
+        ).fetchone()[0]
+        parsed = __import__("json").loads(hero)
+        self.assertIsNone(parsed["legacy_availability"]["dungeon"]["value"])
+        self.assertEqual("legacy_unverified", parsed["legacy_availability"]["dungeon"]["status"])
+        relation = self.repository.connection.execute(
+            "SELECT payload_json FROM relations WHERE import_id=? AND relation='hero_acquisition' AND source_key='Ada' AND target_key='ChestTest'", (result.import_id,)
+        ).fetchone()[0]
+        self.assertIn('"evidence_type":"explicit_configuration"', relation)
+        self.assertIn('"status":"current"', relation)
 
     def test_compact_portrait_mapping_is_deterministic(self) -> None:
         expected = {
@@ -185,7 +222,20 @@ class CtaHeroImportTests(unittest.TestCase):
         self.assertEqual({
             "code": "BuffHP", "target": "All", "source_value": 12.5,
             "name": "Buff HP", "description": "All team: +12.5% HP",
+            "semantics": {"status": "strongly_supported", "unit": "percent", "meaning": "team_stat_modifier", "target_kind": "all"},
         }, passive("BuffHP", "All", "12.5"))
+
+    def test_skill_attribute_semantics_distinguish_fraction_percent_duration_and_raw_values(self) -> None:
+        facts = attribute_semantics({"effectChance": "0.20", "cooldown": "0", "hpPercent": "0.08", "effectValue": "7"})
+        self.assertEqual((20.0, "percent"), (facts["effectChance"]["display_value"], facts["effectChance"]["unit"]))
+        self.assertEqual((0, "seconds"), (facts["cooldown"]["display_value"], facts["cooldown"]["unit"]))
+        self.assertEqual(8.0, facts["hpPercent"]["display_value"])
+        self.assertEqual("unresolved", facts["effectValue"]["status"])
+
+    def test_unrecognized_passive_remains_unresolved(self) -> None:
+        result = passive("Frenzy", "Self", "0.5")
+        self.assertEqual("unresolved", result["semantics"]["status"])
+        self.assertIsNone(result["description"])
 
     def test_suffix_variant_classification_is_deterministic(self) -> None:
         lines = HEROES.splitlines()

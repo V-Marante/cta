@@ -13,7 +13,7 @@ For current work, use sources in this order:
 
 The retained BlueStacks package is `com.godzilab.idlerpg` version `2.0.821` (`versionCode=200821`). On 2026-08-06, BlueStacks offered no update, the game launched successfully, `HD-Adb.exe devices` showed `127.0.0.1:5555` and `emulator-5554`, and `dumpsys package` reconfirmed version `2.0.821`, first installed and last updated on 2026-08-05 11:52:30. This is therefore the latest version currently obtainable through the installed BlueStacks distribution.
 
-Google Play Games logs in the historical reports observed `2.0.822` (`versionCode=200822`). That difference is retained as cross-distribution provenance. It does not establish that `2.0.822` remains generally available, that its content is newer than the BlueStacks runtime patches, or that the current BlueStacks extraction is incomplete.
+Google Play Games logs in the historical reports contain `2.0.822` (`versionCode=200822`) as a raw value. A 2026-08-06 public-source follow-up found that current Google Play metadata identifies 2.0.821/200821, matching BlueStacks exactly; no public listing or retained package corroborates 2.0.822 as a released build. Preserve the historical string, but do not treat it as a newer public version or evidence that this extraction is incomplete. See report 25.
 
 ## Reconciliation results
 
@@ -33,7 +33,7 @@ Google Play Games logs in the historical reports observed `2.0.822` (`versionCod
 | APK assets represented by `cache/content/` | False | The base APK contains 623 `assets/` entries. Only 115 top-level APK asset basenames overlap the materialized cache; many bundled UI atlases, shaders, fonts, and static images exist only in the APK snapshot. |
 | Authentic UI/job/element icons unavailable | Resolved | The dependency-free local extractor reads five `Elt_*` frames and ten distinct neutral `HE_Job*` indicator frames from `UI1`, writing ignored PNGs and SHA-256 provenance under `local/proprietary/ui-icons/`. |
 | Latest version obtainable through installed BlueStacks | Resolved on 2026-08-06 | BlueStacks offered no update; the launched package reported `2.0.821` (`versionCode=200821`) through `HD-Adb.exe`. |
-| Why historical Google Play Games reported `2.0.822` | Still unresolved but non-blocking | Treat it as distribution-specific historical provenance. It does not override the verified BlueStacks source version. |
+| Why historical Google Play Games contained `2.0.822` | Still unresolved but non-blocking | Current public metadata contradicts it as the latest released version. Preserve it as unexplained raw historical evidence only. |
 | Cache and APK represent one proven content version | Not proven | APK package version, patch filenames/member timestamps, and materialized cache must be recorded separately. Matching one `Heroes.csv` proves that file's materialization, not global version identity. |
 
 ## Report-by-report disposition
@@ -100,4 +100,4 @@ If a refresh is requested, commands must be generated for Windows PowerShell usi
 
 ## Current conclusion
 
-BlueStacks `2.0.821` APKs and the BlueStacks shared runtime cache are the repository's authoritative extraction sources and were reconfirmed as the latest version offered by the installed BlueStacks distribution on 2026-08-06. Reports `01`–`16` preserve investigation history but no longer define current blockers or next steps. Authentic distinct job indicators, elements, and compact `GMI_*` hero extraction is implemented under ignored `local/proprietary/`; all 116 playable heroes have verified compact portraits. A new version-scoped pull is needed only when BlueStacks offers a future update or runtime file hashes change.
+BlueStacks `2.0.821` APKs and shared runtime cache are the repository's authoritative extraction sources. Installed-package and current public Google Play evidence agree on 2.0.821/200821. Report 25 additionally reconciles all four APK hashes, all 1,320 shared files, all four patch bundles, canonical hero sources, current parser identities, every audit, and 116/116 local portraits with no drift. Reports `01`–`16` preserve investigation history but no longer define current blockers or next steps. A new pull is needed only when the installed version or retained source hashes change.

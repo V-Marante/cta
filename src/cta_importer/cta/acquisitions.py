@@ -32,7 +32,7 @@ def _source_name(value: str) -> str:
 
 
 class HeroAcquisitionParser:
-    descriptor = ParserDescriptor("cta.hero_acquisition", "1.3.1", 1, priority=100)
+    descriptor = ParserDescriptor("cta.hero_acquisition", "1.4.0", 2, priority=100)
 
     def accepts(self, context: ParseContext, artifact: SourceArtifact) -> bool:
         return Path(artifact.relative_path).name == "Config.xml"
@@ -66,7 +66,9 @@ class HeroAcquisitionParser:
                 hero_id = heroes_by_lower.get(source_hero_id.lower(), source_hero_id)
                 payload = {"medal_id": item if reference_style == "medal" else f"Medal_{hero_id}",
                     "reference_style": reference_style, "count": scalar(node.get("x")), "weight": scalar(node.get("y")),
-                    "current": source_key != "ChestHeroesPast"}
+                    "current": source_key != "ChestHeroesPast", "evidence_type": "explicit_configuration",
+                    "status": "historical" if source_key == "ChestHeroesPast" else "current",
+                    "source_path": artifact.relative_path, "source_record": source_key}
                 if hero_id != source_hero_id:
                     payload.update({"source_hero_id": source_hero_id, "case_normalized": True})
                 relations.append(RelationRecord("hero_acquisition", "hero", hero_id, "acquisition_source", source_key,

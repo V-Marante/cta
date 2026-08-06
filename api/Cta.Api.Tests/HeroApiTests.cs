@@ -29,6 +29,17 @@ public sealed class HeroApiTests
     }
 
     [Fact]
+    public async Task Cached_projection_changes_when_a_new_import_becomes_latest()
+    {
+        using var factory = new ApiFactory("cta");
+        factory.Seed("old", "cta", "2026-01-01", new HeroSeed("Old", "Old Hero"));
+        var client = factory.CreateClient();
+        Assert.Equal("Old", (await Get(client, "/api/heroes")).GetProperty("items")[0].GetProperty("id").GetString());
+        factory.Seed("new", "cta", "2026-02-01", new HeroSeed("New", "New Hero"));
+        Assert.Equal("New", (await Get(client, "/api/heroes")).GetProperty("items")[0].GetProperty("id").GetString());
+    }
+
+    [Fact]
     public async Task Only_collectible_heroes_are_exposed_and_search_and_filters_work()
     {
         using var factory = Seeded(); var client = factory.CreateClient();
@@ -55,7 +66,31 @@ public sealed class HeroApiTests
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/heroes/Missing")).StatusCode);
         var detail = await Get(client, "/api/heroes/Alpha");
         Assert.Equal("Fallback Skill", detail.GetProperty("skills")[0].GetProperty("name").GetString());
-        Assert.Equal("Fallback description", detail.GetProperty("skills")[0].GetProperty("description").GetString());
+        var skill = detail.GetProperty("skills")[0];
+        Assert.Equal("Works for 5 seconds.", skill.GetProperty("description").GetString());
+        Assert.Equal("5 seconds", skill.GetProperty("descriptionParameters").GetProperty("duration").GetString());
+        Assert.Empty(skill.GetProperty("unresolvedPlaceholders").EnumerateArray());
+        Assert.Equal("0", skill.GetProperty("components")[1].GetProperty("attributes").GetProperty("cooldown").GetString());
+    }
+
+    [Fact]
+    public async Task Progression_semantics_and_legacy_availability_are_distinct_from_explicit_sources()
+    {
+        using var factory = Seeded(); var detail = await Get(factory.CreateClient(), "/api/heroes/Alpha");
+        var hero = detail.GetProperty("hero");
+        Assert.Equal("unresolved", hero.GetProperty("progressionSemantics").GetProperty("base_stars").GetProperty("status").GetString());
+        Assert.True(hero.GetProperty("legacyAvailability").GetProperty("shop").GetProperty("value").GetBoolean());
+        Assert.Contains(hero.GetProperty("acquisition").EnumerateArray(),
+            source => source.GetProperty("evidenceType").GetString() == "explicit_configuration");
+    }
+
+    [Fact]
+    public async Task Stat_semantics_preserve_supported_and_unresolved_source_values()
+    {
+        using var factory = Seeded(); var hero = (await Get(factory.CreateClient(), "/api/heroes/Alpha")).GetProperty("hero");
+        Assert.Equal("base_attack_damage", hero.GetProperty("statSemantics").GetProperty("attack").GetProperty("meaning").GetString());
+        Assert.Equal("unresolved", hero.GetProperty("statSemantics").GetProperty("power").GetProperty("status").GetString());
+        Assert.Equal("Factor per Star", hero.GetProperty("sourceCalculations").GetProperty("factor_per_star").GetProperty("source_field").GetString());
     }
 
     [Fact]
@@ -75,9 +110,12 @@ public sealed class HeroApiTests
     {
         using var factory = new ApiFactory(withUiIcon: true);
         var client = factory.CreateClient();
-        var response = await client.GetAsync("/ui-icons/elements/fire.png");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/ui-icons/elements/fire.png");
+        request.Headers.Add("Origin", "http://localhost:5173");
+        var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("http://localhost:5173", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/ui-icons/elements/fire.png", null)).StatusCode);
     }
 
@@ -90,7 +128,11 @@ public sealed class HeroApiTests
         var client = factory.CreateClient();
         var hero = (await Get(client, "/api/heroes/Alpha")).GetProperty("hero");
         Assert.Equal("/portraits/Alpha.png", hero.GetProperty("portraitUrl").GetString());
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/portraits/Alpha.png")).StatusCode);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/portraits/Alpha.png");
+        request.Headers.Add("Origin", "http://localhost:5173");
+        var portrait = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, portrait.StatusCode);
+        Assert.Equal("http://localhost:5173", portrait.Headers.GetValues("Access-Control-Allow-Origin").Single());
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/portraits/Alpha.png", null)).StatusCode);
     }
 
