@@ -15,6 +15,7 @@ type = "http"
 [env]
   ASPNETCORE_URLS = "http://0.0.0.0:8080"
   ASPNETCORE_ENVIRONMENT = "Production"
+  PortraitMode = "bundled"
 
 [http_service]
   internal_port = 8080
