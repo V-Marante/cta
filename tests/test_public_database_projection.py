@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicDatabaseProjectionTests(unittest.TestCase):
-    def test_projects_only_latest_collectible_catalogue_without_raw_provenance(self):
+    def test_projects_all_latest_classifications_without_raw_provenance(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "private.sqlite"
             public = Path(directory) / "public.sqlite"
@@ -45,9 +45,10 @@ class PublicDatabaseProjectionTests(unittest.TestCase):
                     {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")},
                 )
                 heroes = db.execute("SELECT entity_id,payload_json FROM catalog_entities WHERE kind='hero'").fetchall()
-                self.assertEqual(["Public"], [row[0] for row in heroes])
-                self.assertNotIn("raw", json.loads(heroes[0][1]))
-                self.assertNotIn("source_path", json.loads(heroes[0][1]))
+                self.assertEqual(["Enemy", "Public"], sorted(row[0] for row in heroes))
+                for _, payload in heroes:
+                    self.assertNotIn("raw", json.loads(payload))
+                    self.assertNotIn("source_path", json.loads(payload))
                 relation = json.loads(db.execute("SELECT payload_json FROM catalog_relations").fetchone()[0])
                 self.assertNotIn("source_record", relation)
 
