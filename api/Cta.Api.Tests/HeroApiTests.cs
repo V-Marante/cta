@@ -63,13 +63,13 @@ public sealed class HeroApiTests
     }
 
     [Fact]
-    public async Task Only_collectible_heroes_are_exposed_and_search_and_filters_work()
+    public async Task All_classifications_are_exposed_and_collectible_filter_and_search_work()
     {
         using var factory = Seeded(); var client = factory.CreateClient();
-        Assert.Equal(2, (await Get(client, "/api/heroes")).GetProperty("total").GetInt32());
-        Assert.Equal(2, (await Get(client, "/api/heroes?includeNonCollectible=true")).GetProperty("total").GetInt32());
+        Assert.Equal(3, (await Get(client, "/api/heroes")).GetProperty("total").GetInt32());
+        Assert.Equal(2, (await Get(client, "/api/heroes?classification=collectible")).GetProperty("total").GetInt32());
         foreach (var query in new[] { "search=aLPHa", "class=Ranger", "element=Fire", "rarity=Epic", "mobility=ground", "acquisition=Test%20Chest", "attribute=Evade" })
-            Assert.Equal(1, (await Get(client, $"/api/heroes?{query}")).GetProperty("total").GetInt32());
+            Assert.Equal(1, (await Get(client, $"/api/heroes?classification=collectible&{query}")).GetProperty("total").GetInt32());
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public sealed class HeroApiTests
         using var factory = Seeded(); var client = factory.CreateClient();
         var first = await Get(client, "/api/heroes?page=0&pageSize=1");
         Assert.Equal(1, first.GetProperty("page").GetInt32()); Assert.Single(first.GetProperty("items").EnumerateArray());
-        Assert.Empty((await Get(client, "/api/heroes?page=3&pageSize=1")).GetProperty("items").EnumerateArray());
+        Assert.Empty((await Get(client, "/api/heroes?page=4&pageSize=1")).GetProperty("items").EnumerateArray());
         Assert.Equal(250, (await Get(client, "/api/heroes?pageSize=999")).GetProperty("pageSize").GetInt32());
     }
 
@@ -225,22 +225,22 @@ public sealed class HeroApiTests
     }
 
     [Fact]
-    public async Task Non_playable_classifications_are_omitted_from_all_hero_endpoints()
+    public async Task Non_playable_classifications_are_visible_and_filterable()
     {
         using var factory = new ApiFactory("cta");
         var categories = new[] { "collectible", "uncertain", "enemy", "npc", "summoned_variant", "transformed_variant", "cosmetic_variant", "non_collectible" };
         factory.Seed("categories", "cta", "2026-04-01", categories.Select((kind, index) =>
             new HeroSeed($"Hero{index}", $"Hero {index}", Classification: kind)).ToArray());
         var client = factory.CreateClient();
-        Assert.Equal(1, (await Get(client, "/api/heroes")).GetProperty("total").GetInt32());
-        Assert.Equal(1, (await Get(client, "/api/heroes?includeNonCollectible=true")).GetProperty("total").GetInt32());
+        Assert.Equal(categories.Length, (await Get(client, "/api/heroes")).GetProperty("total").GetInt32());
+        Assert.Equal(1, (await Get(client, "/api/heroes?classification=collectible")).GetProperty("total").GetInt32());
         foreach (var index in Enumerable.Range(1, categories.Length - 1))
         {
-            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/heroes/Hero{index}")).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/heroes/Hero{index}/skills")).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/heroes/Hero{index}")).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/heroes/Hero{index}/skills")).StatusCode);
         }
         var metadata = await Get(client, "/api/heroes/filters");
-        Assert.False(metadata.TryGetProperty("classifications", out _));
+        Assert.Contains("uncertain", metadata.GetProperty("classifications").EnumerateArray().Select(x => x.GetString()));
     }
 
     private static ApiFactory Seeded()

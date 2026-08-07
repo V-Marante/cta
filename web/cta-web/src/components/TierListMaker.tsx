@@ -44,7 +44,7 @@ export function TierListMaker() {
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true); setError(undefined)
-    getHeroes({ search: '', heroClass: '', element: '', rarity: '', mobility: '', acquisition: '', attribute: '' }, controller.signal)
+    getHeroes({ search: '', heroClass: '', element: '', rarity: '', mobility: '', acquisition: '', attribute: '', classification: 'collectible' }, controller.signal)
       .then(page => setHeroes([...page.items].sort((left, right) => left.name.localeCompare(right.name))))
       .catch(value => { if (value.name !== 'AbortError') setError('Could not load heroes for the tier list.') })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })

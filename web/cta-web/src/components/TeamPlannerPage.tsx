@@ -8,7 +8,7 @@ import { PlannerHeroLibrary, type PlannerGrouping } from './PlannerHeroLibrary'
 import { TeamSlotGrid } from './TeamSlotGrid'
 import { TeamSummary } from './TeamSummary'
 
-const allHeroes = { search: '', heroClass: '', element: '', rarity: '', mobility: '', acquisition: '', attribute: '' }
+const allHeroes = { search: '', heroClass: '', element: '', rarity: '', mobility: '', acquisition: '', attribute: '', classification: 'collectible' }
 
 export function TeamPlannerPage() {
   const [heroes, setHeroes] = useState<Hero[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState<string>()

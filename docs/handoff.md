@@ -40,8 +40,8 @@ Configuration keys are `Database`, `GameId` (default `com.godzilab.idlerpg`), `H
 
 Endpoints:
 
-- `GET /api/heroes`: paginated collectible summaries; case-insensitive name/ID search; class, tribe, element, damage type, rarity, mobility, acquisition, and attribute filters. Non-playable records cannot be opted in.
-- `GET /api/heroes/filters`: collectible-only class, tribe, element, damage-type, rarity, mobility, acquisition, and attribute metadata.
+- `GET /api/heroes`: paginated all-classification summaries; case-insensitive name/ID search; class, tribe, element, damage type, rarity, mobility, acquisition, attribute, and classification filters. Each record exposes its classification and evidence summary.
+- `GET /api/heroes/filters`: all-source class, tribe, element, damage-type, rarity, mobility, acquisition, classification, and attribute metadata.
 - `GET /api/heroes/{id}`: hero summary plus ordered visible skills.
 - `GET /api/heroes/{id}/skills`: ordered visible skills.
 - Vite proxies `/api`, health endpoints, and `/assets` to the local API. Production serves the compiled SPA, API, and versioned assets from one Fly origin.
@@ -132,7 +132,7 @@ The setup/import/API commands above were successfully exercised in this reposito
 
 Python tests cover atomic/idempotent imports, version identity, validation rejection, parser exceptions, rollback on persistence failure, the complete synthetic CTA hero slice and provenance, stable parser versions, duplicate hero rejection, case-normalized references, evidence payloads, all classification rules, `Werewolf`, all ten known no-icon/no-acquisition IDs, and synthetic APK/listing/patch/canonical-source reconciliation.
 
-HTTP API tests cover no import, game-scoped latest selection, ignoring other games, cache rollover to a newly selected import, exclusion of every non-playable classification from list/detail/skills, case-insensitive search, class/element/rarity/mobility/acquisition/attribute filters, pagination boundaries, missing detail, detail skills and localization fallback, collectible-only filter metadata, health, and read-only connection configuration.
+HTTP API tests cover no import, game-scoped latest selection, ignoring other games, cache rollover to a newly selected import, visibility and filtering of every classification from list/detail/skills, case-insensitive search, class/element/rarity/mobility/acquisition/attribute filters, pagination boundaries, missing detail, detail skills and localization fallback, all-source filter metadata, health, and read-only connection configuration.
 
 Frontend tests cover hero cards, authentic URLs for every job/element icon, missing-icon text fallback, loading and announced empty results, named filter/roster/search controls, request failure/retry, filter requests, stale-request exclusion, missing portrait fallback, navigation, detail rendering, detail-title focus, tier-list routing, one-tier default, compact portrait/name cards and Available pool, drag/drop portrait placement, click-to-Available removal, deterministic unique colors, rename/persistence, tier reordering, delete-to-Available behavior, development random fill, export wiring, and real PNG canvas/full-name fallback output. API tests also verify that a synthetic local UI icon is served and cannot be written through HTTP. Python tests cover RGBA8888/RGBA4444 decoding, trimmed-frame placement, PNG output, and atlas-bounds rejection without committing proprietary fixtures.
 

@@ -85,10 +85,11 @@ def main() -> int:
         relation_kinds = {row[0] for row in db.execute("SELECT DISTINCT kind FROM catalog_relations")}
         if relation_kinds - {"character_skill", "hero_acquisition"}:
             fail(f"unexpected public relation kinds: {sorted(relation_kinds)}")
-        non_collectible = db.execute("""SELECT count(*) FROM catalog_entities
-            WHERE kind='hero_classification' AND json_extract(payload_json,'$.kind')!='collectible'""").fetchone()[0]
-        if non_collectible:
-            fail("public database contains non-collectible hero classifications")
+        missing_classification = db.execute("""SELECT count(*) FROM catalog_entities h
+            LEFT JOIN catalog_entities c ON c.release_id=h.release_id AND c.kind='hero_classification' AND c.entity_id=h.entity_id
+            WHERE h.kind='hero' AND c.entity_id IS NULL""").fetchone()[0]
+        if missing_classification:
+            fail("public database contains hero records without classifications")
         for table in required:
             for row in db.execute(f"SELECT * FROM {table}"):
                 if SENSITIVE.search(" ".join(str(value) for value in row if value is not None)):

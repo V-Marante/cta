@@ -6,6 +6,7 @@ export function FilterToolbar({ filters, query, update }: { filters: Filters; qu
     <Select label="Filter by element" value={query.element} empty="All elements" options={filters.elements} change={element => update({ element })} />
     <Select label="Filter by rarity" value={query.rarity} empty="All rarities" options={filters.rarities} change={rarity => update({ rarity })} />
     <Select label="Filter by mobility" value={query.mobility} empty="Ground & flying" options={filters.mobilities} change={mobility => update({ mobility })} />
+    <Select label="Filter by classification" value={query.classification ?? ''} empty="All classifications" options={filters.classifications} change={classification => update({ classification })} />
     <Select label="Filter by acquisition" value={query.acquisition} empty="All acquisition" options={filters.acquisitions} change={acquisition => update({ acquisition })} />
     <select value={query.attribute} onChange={e => update({ attribute: e.target.value })} aria-label="Filter by attribute"><option value="">All attributes</option>{filters.attributes.map(x => <option value={x.value} key={x.value}>{x.label}</option>)}</select>
   </section>

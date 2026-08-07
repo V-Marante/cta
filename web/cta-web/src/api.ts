@@ -31,5 +31,6 @@ export function getHeroes(query: HeroQuery, signal?: AbortSignal) {
   if (query.mobility) parameters.set('mobility', query.mobility)
   if (query.acquisition) parameters.set('acquisition', query.acquisition)
   if (query.attribute) parameters.set('attribute', query.attribute)
+  if (query.classification) parameters.set('classification', query.classification)
   return request<HeroPage>(`/api/heroes?${parameters}`, signal)
 }

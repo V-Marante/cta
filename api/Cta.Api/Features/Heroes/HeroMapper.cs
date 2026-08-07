@@ -17,6 +17,11 @@ public static class HeroMapper
         string? RawText(string name) => GetString(raw, name)?.Trim() is { Length: > 0 } value ? value : null;
         var canonical = Text("canonical_name");
         using var classification = JsonDocument.Parse(classificationJson ?? "{}");
+        var classificationRoot = classification.RootElement;
+        var classificationKind = GetString(classificationRoot, "kind") ?? "collectible";
+        var classificationConfidence = GetString(classificationRoot, "confidence") ?? "unknown";
+        var classificationScore = classificationRoot.TryGetProperty("score", out var score) && score.TryGetInt32(out var parsedScore) ? parsedScore : 0;
+        var classificationReason = GetString(classificationRoot, "reason");
         var traits = root.TryGetProperty("traits", out var values)
             ? values.EnumerateArray().Select(x => x.GetString()).Where(x => x is not null).Select(x => x!).ToArray()
             : new[] { RawText("Ability1"), RawText("Ability2"), RawText("Ability3") }.Where(x => x is not null).Select(x => x!).ToArray();
@@ -35,8 +40,8 @@ public static class HeroMapper
             root.TryGetProperty("progression_semantics", out var progressionSemantics) ? progressionSemantics.Clone() : ProgressionSemantics(RawText),
             root.TryGetProperty("availability", out var availability) ? availability.Clone() : JsonSerializer.SerializeToElement(new { dungeon = Flag(RawText("Dungeon")), shop = Flag(RawText("Shop")), event_available = Flag(RawText("Event")), epic_chest = Flag(RawText("ChestEpic")) }),
             root.TryGetProperty("legacy_availability", out var legacyAvailability) ? legacyAvailability.Clone() : LegacyAvailability(RawText),
-            heroAcquisition, GetString(classification.RootElement, "kind") ?? "collectible",
-            GetString(classification.RootElement, "owner_id"), canonical, raw);
+            heroAcquisition, classificationKind, classificationConfidence, classificationScore, classificationReason,
+            GetString(classificationRoot, "owner_id"), canonical, raw);
     }
 
     public static string? GetString(JsonElement element, string name) => element.ValueKind == JsonValueKind.Object &&

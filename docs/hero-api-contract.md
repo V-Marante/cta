@@ -1,6 +1,6 @@
 # Hero API contract
 
-Current contract: CTA hero-library API, 2026-08-06. The API is read-only and only exposes records classified as `collectible`.
+Current contract: CTA hero-library API, 2026-08-07. The API is read-only and exposes all classified source records by default. Use `classification=collectible` for the confirmed playable roster used by team-building tools.
 
 ## Endpoints
 
@@ -12,7 +12,7 @@ Current contract: CTA hero-library API, 2026-08-06. The API is read-only and onl
 | `GET /api/heroes/{id}` | `HeroDetail` | `404` |
 | `GET /api/heroes/{id}/skills` | `Skill[]` | `404` |
 
-The list accepts `search`, `class`, `tribe`, `element`, `damageType`, `rarity`, `mobility`, `acquisition`, `attribute`, `page`, and `pageSize`. Text matching is case-insensitive. `page` is clamped to at least 1 and `pageSize` to 1–250. Unknown query parameters, including the removed `includeNonCollectible`, have no effect.
+The list accepts `search`, `class`, `tribe`, `element`, `damageType`, `rarity`, `mobility`, `acquisition`, `attribute`, `classification`, `page`, and `pageSize`. Text matching is case-insensitive. `classification` matches values such as `collectible`, `uncertain`, `enemy`, `npc`, and variant classifications. The default is all classifications. `page` is clamped to at least 1 and `pageSize` to 1–250. The obsolete `includeNonCollectible` parameter has no effect.
 
 ## Response shapes
 
@@ -35,13 +35,14 @@ The list accepts `search`, `class`, `tribe`, `element`, `damageType`, `rarity`, 
 | `availability` | backward-compatible nullable raw flag values |
 | `legacyAvailability` | provenance-bearing nullable `legacy_unverified` facts |
 | `acquisition` | explicit current/historical configuration relations with evidence and provenance |
-| `classification` | always `collectible` through public endpoints |
+| `classification` | source classification (`collectible`, `uncertain`, `enemy`, `npc`, or variant) |
+| `classificationConfidence`, `classificationScore`, `classificationReason` | evidence summary; score is an internal tally, not a probability |
 | `variantOf`, `canonicalName` | nullable source identity fields |
 | `raw` | original `Heroes.csv` values |
 
 `Skill` contains `id`, `name`, nullable `description`, nullable `descriptionTemplate`, `descriptionParameters`, `unresolvedPlaceholders`, nullable `type`, ordered `components`, and `raw`. Components preserve source attributes and may contain additive `attribute_semantics` facts.
 
-`HeroFilters` contains string arrays `classes`, `tribes`, `elements`, `damageTypes`, `rarities`, `mobilities`, and `acquisitions`, plus `attributes: { value, label }[]`. Values only describe collectible heroes in the selected import.
+`HeroFilters` contains string arrays `classes`, `tribes`, `elements`, `damageTypes`, `rarities`, `mobilities`, `acquisitions`, and `classifications`, plus `attributes: { value, label }[]`. Values describe all source records in the selected import.
 
 ## Compatibility and evidence rules
 

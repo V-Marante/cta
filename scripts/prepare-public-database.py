@@ -110,12 +110,9 @@ def main() -> int:
                 (release_id,),
             )
         }
-        hero_ids = {
-            hero_id for hero_id, payload in classifications.items()
-            if json.loads(payload).get("kind") == "collectible"
-        }
+        hero_ids = set(classifications)
         if not hero_ids:
-            raise SystemExit("latest import contains no collectible heroes")
+            raise SystemExit("latest import contains no classified heroes")
 
         relation_rows = list(source.execute(
             """SELECT relation,source_key,target_key,ordinal,payload_json FROM relations
