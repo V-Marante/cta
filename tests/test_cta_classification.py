@@ -39,7 +39,7 @@ class CtaClassificationTests(unittest.TestCase):
         expected = {
             "Collectible": "collectible", "Uncertain": "uncertain", "Enemy": "enemy", "Npc": "npc",
             "OwnerClone": "summoned_variant", "OwnerBerserk": "transformed_variant",
-            "Cosmetic": "cosmetic_variant", "Werewolf": "non_collectible",
+            "Cosmetic": "cosmetic_variant", "Werewolf": "collectible",
         }
         for key, kind in expected.items():
             self.assertEqual(kind, payloads[key]["kind"])
@@ -47,6 +47,20 @@ class CtaClassificationTests(unittest.TestCase):
             self.assertIn(payloads[key]["confidence"], {"low", "medium", "high"})
         self.assertEqual("Owner", payloads["Cosmetic"]["owner_id"])
         self.assertEqual("Owner", payloads["OwnerClone"]["owner_id"])
+
+    def test_issue_confirmed_missing_heroes_are_collectible(self) -> None:
+        ids = ("FlyBat", "FlyBotDA", "FlySprout", "Werewolf", "TinyDragonFI", "FlyEye", "BlueFish")
+        rows = {key: self.row() for key in ids}
+        root = ET.Element("characters")
+        for key in ids:
+            node = ET.SubElement(root, "character", key=key, iconIdx="1")
+            ET.SubElement(node, "module")
+        entities, _ = classify_heroes(rows, {node.get("key", "").lower(): node for node in root}, {}, self.artifact)
+        payloads = {item.key: item.payload for item in entities}
+        for key in ids:
+            self.assertEqual("collectible", payloads[key]["kind"])
+            self.assertEqual("issue-confirmed player-visible hero roster (2026-08-07)", payloads[key]["reason"])
+            self.assertTrue(payloads[key]["evidence"][-1]["value"])
 
     def test_no_icon_and_no_acquisition_is_uncertain(self) -> None:
         rows = {key: self.row() for key in ("ArthusKnight", "GreenArcher", "IceGolem", "MummyGiant", "Rolexo", "SkeletonArcher", "ViForky", "ViLokt", "ViRagnar", "VuTNTbomb")}

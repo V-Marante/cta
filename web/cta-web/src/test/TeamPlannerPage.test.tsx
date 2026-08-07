@@ -66,7 +66,7 @@ it('filters by search, element, and job and groups by job, element, or fourth ab
   await user.selectOptions(screen.getByLabelText('Element'), 'Fire')
   expect(screen.queryByRole('button', { name: 'Add Bea Hero to team' })).not.toBeInTheDocument()
   await user.selectOptions(screen.getByLabelText('Element'), '')
-  await user.selectOptions(screen.getByLabelText('Job'), 'Knight')
+  await user.selectOptions(screen.getByLabelText('Job (Class)'), 'Knight')
   expect(screen.getByRole('button', { name: 'Add Bea Hero to team' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Add Ada Hero to team' })).not.toBeInTheDocument()
 })

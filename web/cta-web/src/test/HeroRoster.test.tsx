@@ -29,7 +29,7 @@ describe('HeroRoster', () => {
   })
   it('changing a filter updates the request', async () => {
     const fetch = mockFetch(); render(<HeroRoster />); await screen.findByRole('heading', { name: 'Ada Hero' })
-    fireEvent.change(screen.getByLabelText('Filter by class'), { target: { value: 'Ranger' } })
+    fireEvent.change(screen.getByLabelText('Filter by Job (Class)'), { target: { value: 'Ranger' } })
     await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).includes('class=Ranger'))).toBe(true))
   })
   it('stale requests do not overwrite newer results', async () => {

@@ -8,7 +8,7 @@ export function TeamSummary({ heroes }: { heroes: Hero[] }) {
   const jobs = count(heroes, hero => hero.class ?? 'Unknown job')
   const abilities = heroes.filter(hero => hero.passive.name || hero.passive.code)
   return <>
-    <aside className="team-counts"><h2>Composition</h2><SummaryGroup title="Elements" values={elements} icons /><SummaryGroup title="Jobs" values={jobs} /></aside>
+    <aside className="team-counts"><h2>Composition</h2><SummaryGroup title="Elements" values={elements} icons /><SummaryGroup title="Jobs (Classes)" values={jobs} /></aside>
     <section className="team-abilities"><h2>Fourth abilities</h2>{abilities.length ? <ul>{abilities.map(hero => <li key={hero.id}><strong>{hero.name}</strong><span>{fourthAbilityName(hero.passive)}</span><FourthAbilityTarget passive={hero.passive} /></li>)}</ul> : <p>None available for this team.</p>}</section>
   </>
 }

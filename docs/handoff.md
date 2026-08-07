@@ -22,7 +22,7 @@ The public `cta_parsers()` registration function returns these descriptors uncha
 | `cta.localization.en` | 1.3.0 | 1 | 100 | `Persos_en.xml`, `Skills_en.xml`, `Config_en.xml`, `Items_en.xml` |
 | `cta.hero_acquisition` | 1.4.0 | 2 | 100 | `Config.xml` |
 
-Emitted entity namespaces are `hero`, `character`, `hero_variant`, `portrait`, `hero_classification`, `skill`, and `acquisition_source`. Relation namespaces are `hero_character`, `character_variant_of`, `character_skill`, `character_portrait`, `hero_variant_of`, and `hero_acquisition`. Localization namespaces are `hero`, `skill`, `ability`, `skill_description`, and `acquisition_source`, using locale `en` and `name`/`description` fields.
+Emitted entity namespaces are `hero`, `character`, `hero_variant`, `portrait`, `hero_classification`, `skill`, and `acquisition_source`. Relation namespaces are `hero_character`, `character_variant_of`, `character_skill`, `character_portrait`, `hero_variant_of`, and `hero_acquisition`. Localization namespaces are `hero`, `skill`, `ability`, `skill_description`, and `acquisition_source`, using locale `en` and `name`/`description` fields. Hero display names prefer the canonical `Heroes.csv` name over stale localization overlays.
 
 CTA validation emits `duplicate_hero_id` errors and warnings for `missing_localization_key`, `missing_portrait_reference`, `missing_compact_portrait_reference`, `invalid_compact_portrait_reference`, and `unresolved_skill_reference`. Generic validation additionally reports duplicate/empty entities and unresolved relation endpoints. Source path/record and raw hero CSV values remain persisted.
 
@@ -30,7 +30,7 @@ The internal `Heroes.csv` class `Fighter` is exposed as the player-facing job `B
 
 Acquisition parsing covers chest groups, Arena/Arena 3v3/Crusade medal shops, and starter packs. Acquisition-source entities carry a normalized kind and display name. Senshi resolves both `Chest Halloween` and `Crusade Shop` from `Config.xml`.
 
-Every hero balance row now receives an evidence-backed classification payload containing `kind`, `confidence`, `score`, `reason`, resolved `character_id`, acquisition sources, and individual weighted evidence entries. Strong variant/enemy/NPC rules take precedence; collectible status requires a minimum evidence score plus either a usable icon index or acquisition membership. Weak no-icon/no-acquisition rows are `uncertain`. `Werewolf` is the sole explicit manual `non_collectible` review result because current files retain strong but stale Halloween evidence despite user confirmation that it is absent from the visible roster.
+Every hero balance row now receives an evidence-backed classification payload containing `kind`, `confidence`, `score`, `reason`, resolved `character_id`, acquisition sources, and individual weighted evidence entries. Strong variant/enemy/NPC rules take precedence; collectible status requires a minimum evidence score plus either a usable icon index or acquisition membership. Weak no-icon/no-acquisition rows are `uncertain`. The seven issue-confirmed roster rows (`FlyBat`, `FlyBotDA`, `FlySprout`, `Werewolf`, `TinyDragonFI`, `FlyEye`, and `BlueFish`) use narrow manual collectible evidence because their authentic portraits are present despite enemy-like source structure.
 
 Hero/character, character/skill, acquisition, validation, and audit joins are case-insensitive. Canonical target IDs are persisted in relations while original differently-cased IDs remain in relation payloads as `source_target_id` or `source_hero_id` with `case_normalized=true`.
 
@@ -138,7 +138,7 @@ Frontend tests cover hero cards, authentic URLs for every job/element icon, miss
 
 ## Known limitations and technical debt
 
-- Classification is deterministic and evidence-backed but still uses weighted thresholds. Native roster/dex flags could supersede those weights if recovered. `Werewolf` remains an explicit manual exception because the available files contradict current player-visible behavior.
+- Classification is deterministic and evidence-backed but still uses weighted thresholds. Native roster/dex flags could supersede those weights if recovered. The seven issue-confirmed rows remain explicit manual collectible exceptions until stronger roster metadata is recovered.
 - Compact GMI portrait mapping/extraction is implemented and covers every current playable hero. The 23 unresolved source rows are non-playable/legacy/variant records; `CuddlesBerserk` requests out-of-range `GMI_EA_033` while the retained atlas ends at Earth index 32.
 - Explicit acquisition and nullable legacy availability are separate API evidence lanes. The remaining limitation is that legacy flag meanings/freshness are not proven.
 - English localization is partial. Canonical/ID and unavailable-description fallbacks are intentional.

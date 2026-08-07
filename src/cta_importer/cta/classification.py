@@ -18,10 +18,17 @@ class Evidence:
         return {"code": self.code, "weight": self.weight, "value": self.value, "source": self.source}
 
 
-# This is deliberately a narrow, reviewable exception rather than a roster allow/deny list.
-# The source files still contain strong but stale Halloween chest/icon evidence for Werewolf.
-_MANUALLY_VERIFIED_NON_ROSTER = {
-    "werewolf": "user-confirmed absent from the player-visible roster (2026-08-06)",
+# These are deliberately narrow, reviewable exceptions rather than a roster allow/deny list.
+# The issue-confirmed rows are module-backed characters whose extracted hero portraits
+# already exist but whose source data otherwise resembles an enemy.
+_MANUALLY_VERIFIED_COLLECTIBLE = {
+    "flybat": "issue-confirmed player-visible hero roster (2026-08-07)",
+    "flybotda": "issue-confirmed player-visible hero roster (2026-08-07)",
+    "flysprout": "issue-confirmed player-visible hero roster (2026-08-07)",
+    "werewolf": "issue-confirmed player-visible hero roster (2026-08-07)",
+    "tinydragonfi": "issue-confirmed player-visible hero roster (2026-08-07)",
+    "flyeye": "issue-confirmed player-visible hero roster (2026-08-07)",
+    "bluefish": "issue-confirmed player-visible hero roster (2026-08-07)",
 }
 
 
@@ -72,10 +79,10 @@ def classify_heroes(
             kind, reason = "enemy", "module-backed character without hero assets"
             evidence.append(Evidence("module_without_assets", -10, True, "Persos.xml"))
 
-        manual_reason = _MANUALLY_VERIFIED_NON_ROSTER.get(hero_id.lower())
-        if kind is None and manual_reason:
-            kind, reason = "non_collectible", manual_reason
-            evidence.append(Evidence("manual_roster_verification", -10, False, "manual review"))
+        manual_collectible_reason = _MANUALLY_VERIFIED_COLLECTIBLE.get(hero_id.lower())
+        if manual_collectible_reason and kind in {None, "enemy"}:
+            kind, reason = "collectible", manual_collectible_reason
+            evidence.append(Evidence("manual_roster_verification", 10, True, "issue review"))
 
         no_activity = visible_skill_count == 0 and not traits and not availability and not acquisition
         if kind is None and no_activity:

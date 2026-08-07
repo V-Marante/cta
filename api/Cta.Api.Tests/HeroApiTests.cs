@@ -40,6 +40,29 @@ public sealed class HeroApiTests
     }
 
     [Fact]
+    public async Task Canonical_hero_name_wins_over_stale_localization()
+    {
+        using var factory = new ApiFactory();
+        factory.Seed("current", "cta", "2026-08-07", new HeroSeed("ArchDruid", "Groovine", LocalizedName: "Archdruid"));
+        var hero = (await Get(factory.CreateClient(), "/api/heroes/ArchDruid")).GetProperty("hero");
+        Assert.Equal("Groovine", hero.GetProperty("name").GetString());
+        Assert.Equal("Groovine", hero.GetProperty("canonicalName").GetString());
+    }
+
+    [Fact]
+    public async Task Issue_confirmed_missing_heroes_are_listed_and_detailable()
+    {
+        using var factory = new ApiFactory();
+        var ids = new[] { "FlyBat", "FlyBotDA", "FlySprout", "Werewolf", "TinyDragonFI", "FlyEye", "BlueFish" };
+        factory.Seed("current", "cta", "2026-08-07", ids.Select(id => new HeroSeed(id, id)).ToArray());
+        var client = factory.CreateClient();
+        var page = await Get(client, "/api/heroes?pageSize=250");
+        Assert.Equal(ids.Length, page.GetProperty("total").GetInt32());
+        foreach (var id in ids)
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/heroes/{id}")).StatusCode);
+    }
+
+    [Fact]
     public async Task Only_collectible_heroes_are_exposed_and_search_and_filters_work()
     {
         using var factory = Seeded(); var client = factory.CreateClient();

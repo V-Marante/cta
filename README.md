@@ -173,7 +173,7 @@ python3 -m venv .venv
   local/proprietary/hero-icons
 ```
 
-The extractor uses the same element/index mapping as the importer, validates atlas metadata and 162×162 frames, and writes source hashes plus every resolved/unresolved mapping to ignored `provenance.json`. In the verified BlueStacks `2.0.821` corpus it extracts 125 source-row icons and covers all 116 playable heroes.
+The extractor uses the same element/index mapping as the importer, validates atlas metadata and 162×162 frames, and writes source hashes plus every resolved/unresolved mapping to ignored `provenance.json`. In the verified BlueStacks `2.0.821` corpus it extracts 125 source-row icons and covers the reviewed playable roster, including the issue-confirmed enemy-like rows.
 
 The frontend includes a compact local tier-list maker at `/tier-list`. It starts with one `S` tier, loads the same collectible-only hero API, and keeps a scrollable Available portrait pool sticky in the viewport. Every tile is a compact portrait with a full-name box underneath. Up to 15 renamed tiers receive unique deterministic positional colors; colors are not user-editable. Tiers can be moved up/down after creation, with colors following their positions. Heroes are placed and moved by drag-and-drop; clicking a ranked portrait returns it to Available. Development mode includes random fill for visualization, and ranked tiers export as a lossless PNG with the same portrait/name-card layout. Authentic portraits are attempted first; failed export images use the full hero name rather than initials. Drafts use versioned browser `localStorage`; the tool never writes to the API or database.
 
@@ -197,4 +197,4 @@ npm run dev
 
 Open `http://localhost:5173`. The Vite development server proxies API and asset requests to `http://localhost:5080`, matching the unified same-origin production paths. See `docs/deployment.md` for synthetic and local production image builds.
 
-The roster exposes only heroes classified as playable. It supports job, element, rarity, mobility, acquisition, and attribute filters. Cards use authentic locally extracted CTA job-indicator and element icons when present and accessible text when they are absent. The UI also falls back to names for missing portrait files, canonical names or raw IDs for missing English names, and an unavailable-description message for incomplete skill localization.
+The roster exposes only heroes classified as playable. It supports job (class), element, rarity, mobility, acquisition, and attribute filters. Cards use authentic locally extracted CTA job-indicator and element icons when present and accessible text when they are absent. The UI also falls back to names for missing portrait files, canonical names or raw IDs for missing English names, and an unavailable-description message for incomplete skill localization. The fourth ability is also identified as SP4 in player-facing labels.

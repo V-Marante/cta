@@ -23,7 +23,10 @@ public static class HeroMapper
         var traitDtos = traits.Select(code => new TraitDto(code, Humanize(code),
             FormatDescription(code, descriptions.GetValueOrDefault(code), parameters.GetValueOrDefault(id)))).ToArray();
         var heroAcquisition = acquisitions.GetValueOrDefault(id)?.ToList() ?? [];
-        return new(id, localizedName ?? canonical ?? id, Text("class"), Text("tribe"), Text("element"), Text("damage_type"),
+        // Heroes.csv carries the current player-facing name. Older localization
+        // overlays can contain stale translation-era names, so use them only when
+        // the canonical source has no name at all.
+        return new(id, canonical ?? localizedName ?? id, Text("class"), Text("tribe"), Text("element"), Text("damage_type"),
             Text("sex"), Text("mobility") ?? (IsFlag(RawText("Flying")) ? "flying" : "ground"), traitDtos,
             portraitUrl,
             ObjectOrEmpty(root, "stats"), ObjectOrEmpty(root, "stat_semantics"), ObjectOrEmpty(root, "source_calculations"),

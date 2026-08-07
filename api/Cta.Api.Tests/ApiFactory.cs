@@ -79,7 +79,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 availability = new { shop = true }, legacy_availability = new { shop = new { value = true, status = "legacy_unverified", source_field = "Shop", source_path = "Heroes.csv" } }, raw = new { } });
             Entity(db, importId, "hero", hero.Id, payload);
             Entity(db, importId, "hero_classification", hero.Id, JsonSerializer.Serialize(new { kind = hero.Classification, owner_id = (string?)null }));
-            Localize(db, importId, "hero", hero.Id, "name", hero.Name);
+            Localize(db, importId, "hero", hero.Id, "name", hero.LocalizedName ?? hero.Name);
             if (hero.Acquisition is not null)
             {
                 Entity(db, importId, "acquisition_source", hero.Acquisition, $$"""{"source_id":"{{hero.Acquisition}}","kind":"chest"}""");
@@ -123,4 +123,4 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
 public sealed record HeroSeed(string Id, string Name, string Class = "Ranger", string Tribe = "Human", string Element = "Fire",
     string DamageType = "Physical", string Mobility = "ground", string Rarity = "Epic", string Attribute = "Evade",
-    string Classification = "collectible", string? Acquisition = "Test Chest");
+    string Classification = "collectible", string? Acquisition = "Test Chest", string? LocalizedName = null);

@@ -18,8 +18,8 @@ export function PlannerHeroLibrary({ heroes, selected, search, element, job, gro
   return <section className="planner-library" aria-label="Available heroes"><div className="planner-library-heading"><h2>Available heroes</h2><small>{visible.length}</small></div>
     <div className="planner-filters"><label>Search heroes<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Hero name…" /></label>
       <label>Element<select value={element} onChange={event => setElement(event.target.value)}><option value="">All elements</option>{elements.map(value => <option key={value}>{value}</option>)}</select></label>
-      <label>Job<select value={job} onChange={event => setJob(event.target.value)}><option value="">All jobs</option>{jobs.map(value => <option key={value}>{value}</option>)}</select></label>
-      <label>Group by<select value={grouping} onChange={event => setGrouping(event.target.value as PlannerGrouping)}><option value="job">Job</option><option value="element">Element</option><option value="ability">Fourth ability</option></select></label>
+      <label>Job (Class)<select aria-label="Job (Class)" value={job} onChange={event => setJob(event.target.value)}><option value="">All jobs (classes)</option>{jobs.map(value => <option key={value}>{value}</option>)}</select></label>
+      <label>Group by<select value={grouping} onChange={event => setGrouping(event.target.value as PlannerGrouping)}><option value="job">Job (Class)</option><option value="element">Element</option><option value="ability">Fourth ability (SP4)</option></select></label>
     </div>
     {groups.length ? <div className="planner-groups">{groups.map(([label, group]) => <section className="planner-group" key={label} aria-label={`${label} heroes`}><h3>{label} <small>{group.length}</small></h3><div className="planner-portrait-pool">{group.map(hero => <PlannerHeroCard key={hero.id} hero={hero} selected={selected.has(hero.id)} toggle={() => toggle(hero.id)} />)}</div></section>)}</div> : <p className="state">No heroes match these filters.</p>}
   </section>

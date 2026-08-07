@@ -1,5 +1,7 @@
 {
   "dataVersion": "2026-08-06",
-  "gameVersion": "unknown",
-  "databaseHash": "sha256:ff606460ac8e20086c2261ad2fd206149b2366e2f52f4cc729abbd385ba9b8c0"
+  "dataImportId": "ad4a751c-470c-4948-b65a-699092bd5eaf",
+  "gameVersion": "2.0.821",
+  "databaseHash": "sha256:5cee0a4dd9067dee3f89cfcb281145bb6501bd1eb62c9dfd2f35459e9ac5ffc7",
+  "assetsVersion": "unknown"
 }
