@@ -5,6 +5,7 @@ import { navigate } from '../navigation'
 import { exportTierListPng } from '../tierListPng'
 import { ErrorState, LoadingState } from './AsyncStates'
 import { Portrait } from './Portrait'
+import { ClassificationDisclaimer, ClassificationMarker } from './ClassificationMarker'
 
 export type Tier = { id: string; name: string }
 type SavedList = { version: 2; title: string; tiers: Tier[]; assignments: Record<string, string> }
@@ -38,13 +39,14 @@ export function TierListMaker() {
   const saved = useMemo(readSaved, [])
   const [title, setTitle] = useState(saved.title), [tiers, setTiers] = useState(saved.tiers), [assignments, setAssignments] = useState(saved.assignments)
   const [heroes, setHeroes] = useState<Hero[]>([])
+  const [includeCommon, setIncludeCommon] = useState(false)
   const [loading, setLoading] = useState(true), [error, setError] = useState<string>(), [attempt, setAttempt] = useState(0)
   const [exporting, setExporting] = useState(false), [exportError, setExportError] = useState<string>()
 
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true); setError(undefined)
-    getHeroes({ search: '', heroClass: '', element: '', rarity: '', mobility: '', acquisition: '', attribute: '', classification: 'collectible' }, controller.signal)
+    getHeroes({ search: '', heroClass: '', element: '', rarity: '', mobility: '', acquisition: '', attribute: '', classification: '' }, controller.signal)
       .then(page => setHeroes([...page.items].sort((left, right) => left.name.localeCompare(right.name))))
       .catch(value => { if (value.name !== 'AbortError') setError('Could not load heroes for the tier list.') })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
@@ -74,17 +76,18 @@ export function TierListMaker() {
     return next
   })
   const reset = () => { setTitle(defaultTitle); setTiers(initialTiers); setAssignments({}) }
-  const randomize = () => setAssignments(Object.fromEntries(heroes.map(hero => [hero.id, tiers[Math.floor(Math.random() * tiers.length)].id])))
+  const visibleHeroes = useMemo(() => includeCommon ? heroes : heroes.filter(hero => hero.progression.rarity_name !== 'Common'), [heroes, includeCommon])
+  const randomize = () => setAssignments(Object.fromEntries(visibleHeroes.map(hero => [hero.id, tiers[Math.floor(Math.random() * tiers.length)].id])))
   const download = async () => {
     setExporting(true); setExportError(undefined)
-    try { await exportTierListPng(title.trim() || defaultTitle, tiers, tierColors, assignments, heroes) }
+    try { await exportTierListPng(title.trim() || defaultTitle, tiers, tierColors, assignments, visibleHeroes) }
     catch { setExportError('Could not export this tier list. Check that portrait images are available and try again.') }
     finally { setExporting(false) }
   }
-  const heroesFor = (tierId?: string) => heroes.filter(hero => tierId ? assignments[hero.id] === tierId : !tiers.some(tier => tier.id === assignments[hero.id]))
+  const heroesFor = (tierId?: string) => visibleHeroes.filter(hero => tierId ? assignments[hero.id] === tierId : !tiers.some(tier => tier.id === assignments[hero.id]))
 
   return <main className="tier-page"><button className="back" onClick={() => navigate('/')}>← Hero library</button>
-    <header className="tier-heading"><div><span className="eyebrow">Portrait ranking</span><h1 className="page-title" tabIndex={-1}>Tier List Maker</h1><label className="tier-title">Tier list title<input value={title} maxLength={80} onChange={event => setTitle(event.target.value)} /></label><p>Drag portraits into tiers. Click a ranked portrait to return it to Available. Your list stays in this browser.</p></div><div className="tier-actions"><button onClick={addTier} disabled={tiers.length >= tierColors.length}>Add tier</button>{import.meta.env.DEV && <button onClick={randomize} disabled={!heroes.length}>Random fill</button>}<button onClick={download} disabled={exporting}>{exporting ? 'Exporting…' : 'Export PNG'}</button><button onClick={reset}>Reset</button></div></header>
+    <header className="tier-heading"><div><span className="eyebrow">Portrait ranking</span><h1 className="page-title" tabIndex={-1}>Tier List Maker</h1><label className="tier-title">Tier list title<input value={title} maxLength={80} onChange={event => setTitle(event.target.value)} /></label><p>Drag portraits into tiers. Click a ranked portrait to return it to Available. Your list stays in this browser.</p><label className="rarity-toggle"><input type="checkbox" checked={includeCommon} onChange={event => setIncludeCommon(event.target.checked)} /> Include Common heroes</label></div><div className="tier-actions"><button onClick={addTier} disabled={tiers.length >= tierColors.length}>Add tier</button>{import.meta.env.DEV && <button onClick={randomize} disabled={!visibleHeroes.length}>Random fill</button>}<button onClick={download} disabled={exporting}>{exporting ? 'Exporting…' : 'Export PNG'}</button><button onClick={reset}>Reset</button></div></header><ClassificationDisclaimer />
     {exportError && <p className="export-error" role="alert">{exportError}</p>}
     {error ? <ErrorState message={error} retry={() => setAttempt(value => value + 1)} /> : loading ? <LoadingState>Loading portraits…</LoadingState> : <div className="tier-workspace">
       <section className="tier-board" aria-label="Hero tiers">{tiers.map((tier, index) => <TierRow key={tier.id} tier={tier} color={tierColors[index]} heroes={heroesFor(tier.id)} place={place} rename={rename} remove={tiers.length > 1 ? () => deleteTier(tier.id) : undefined} moveUp={index > 0 ? () => moveTier(tier.id, -1) : undefined} moveDown={index < tiers.length - 1 ? () => moveTier(tier.id, 1) : undefined} />)}</section>
@@ -106,8 +109,8 @@ function TierRow({ tier, color, heroes, place, rename, remove, moveUp, moveDown 
 
 function PortraitPool({ heroes, remove }: { heroes: Hero[]; remove?: (id: string) => void }) {
   return <div className="portrait-pool">{heroes.map(hero => remove
-    ? <button key={hero.id} className="tier-portrait" aria-label={`Return ${hero.name} to Available`} title={hero.name} draggable onDragStart={event => event.dataTransfer.setData('text/plain', hero.id)} onClick={() => remove(hero.id)}><Portrait hero={hero} /><span className="tier-portrait-name">{hero.name}</span></button>
-    : <div key={hero.id} className="tier-portrait" title={hero.name} draggable onDragStart={event => event.dataTransfer.setData('text/plain', hero.id)}><Portrait hero={hero} /><span className="tier-portrait-name">{hero.name}</span></div>)}</div>
+    ? <button key={hero.id} className="tier-portrait" aria-label={`Return ${hero.name} to Available`} title={hero.name} draggable onDragStart={event => event.dataTransfer.setData('text/plain', hero.id)} onClick={() => remove(hero.id)}><Portrait hero={hero} /><span className="tier-portrait-name">{hero.name}<ClassificationMarker hero={hero} /></span></button>
+    : <div key={hero.id} className="tier-portrait" title={hero.name} draggable onDragStart={event => event.dataTransfer.setData('text/plain', hero.id)}><Portrait hero={hero} /><span className="tier-portrait-name">{hero.name}<ClassificationMarker hero={hero} /></span></div>)}</div>
 }
 
 function readableText(color: string) {

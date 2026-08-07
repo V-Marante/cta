@@ -15,4 +15,9 @@ describe('HeroCard', () => {
     render(<HeroCard hero={hero} />); fireEvent.click(screen.getByRole('button'))
     expect(location.pathname).toBe('/heroes/Ada')
   })
+  it('marks low-confidence classifications without adding a verbose label', () => {
+    render(<HeroCard hero={{ ...hero, classificationConfidence: 'low' }} />)
+    expect(screen.getByLabelText('Classification needs review')).toBeInTheDocument()
+    expect(screen.queryByText(/confidence/)).not.toBeInTheDocument()
+  })
 })

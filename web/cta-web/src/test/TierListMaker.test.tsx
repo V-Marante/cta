@@ -13,6 +13,13 @@ function loadHeroes() {
   return vi.spyOn(globalThis, 'fetch').mockImplementation(() => response({ items: heroes, total: 2, page: 1, pageSize: 250 }))
 }
 
+function loadHeroesWithCommon() {
+  const fetch = loadHeroes()
+  const common = { ...hero, id: 'Common', name: 'Common Hero', progression: { ...hero.progression, rarity_name: 'Common' }, portraitUrl: '/portraits/Common.png' }
+  fetch.mockImplementation(() => response({ items: [{ ...hero, portraitUrl: '/portraits/Ada.png' }, common], total: 2, page: 1, pageSize: 250 }))
+  return fetch
+}
+
 function dragHero(name: string, target: HTMLElement) {
   const data = new Map<string, string>()
   const dataTransfer = { setData: (type: string, value: string) => data.set(type, value), getData: (type: string) => data.get(type) ?? '' }
@@ -90,5 +97,13 @@ describe('TierListMaker', () => {
     await waitFor(() => expect(exportPng).toHaveBeenCalledOnce())
     expect(exportPng.mock.calls[0][0]).toBe('My Best Heroes')
     expect(exportPng.mock.calls[0][3]).toEqual({ Ada: 's' })
+  })
+
+  it('hides Common heroes by default and includes them when toggled', async () => {
+    loadHeroesWithCommon(); render(<TierListMaker />)
+    await screen.findByTitle('Ada Hero')
+    expect(screen.queryByTitle('Common Hero')).not.toBeInTheDocument()
+    await screen.getByLabelText('Include Common heroes').click()
+    expect(screen.getByTitle('Common Hero')).toBeInTheDocument()
   })
 })

@@ -1,0 +1,4 @@
+.classification-marker { margin-left: 2px; color: #ffca58; font-size: .72em; font-weight: 800; vertical-align: super; }
+.classification-disclaimer { margin: 0 auto 18px; color: #9daec0; font-size: .72rem; text-align: center; }
+.classification-disclaimer sup { color: #ffca58; font-weight: 800; }
+.rarity-toggle { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; color: #c5d0dc; font-size: .8rem; }

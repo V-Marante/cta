@@ -7,8 +7,9 @@ import { ErrorState, LoadingState } from './AsyncStates'
 import { PlannerHeroLibrary, type PlannerGrouping } from './PlannerHeroLibrary'
 import { TeamSlotGrid } from './TeamSlotGrid'
 import { TeamSummary } from './TeamSummary'
+import { ClassificationDisclaimer } from './ClassificationMarker'
 
-const allHeroes = { search: '', heroClass: '', element: '', rarity: '', mobility: '', acquisition: '', attribute: '', classification: 'collectible' }
+const allHeroes = { search: '', heroClass: '', element: '', rarity: '', mobility: '', acquisition: '', attribute: '', classification: '' }
 
 export function TeamPlannerPage() {
   const [heroes, setHeroes] = useState<Hero[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState<string>()
@@ -29,7 +30,7 @@ export function TeamPlannerPage() {
   return <main className="team-planner"><button className="back" onClick={() => navigate('/')}>← Hero library</button><header className="planner-heading"><div><span className="eyebrow">Portrait team builder</span><h1 className="page-title" tabIndex={-1}>Team Planner</h1><p>Click a portrait to add or remove a hero.</p></div></header>
     {error ? <ErrorState message={error} retry={() => setAttempt(value => value + 1)} /> : loading ? <LoadingState /> : <>
       <div className="team-heading"><div><h2>Selected heroes</h2><p className="team-count" aria-live="polite">Team: {team.length} / 10 heroes · {team.length ? 'Valid' : 'Add at least one hero'}</p></div><button type="button" onClick={planner.clear} disabled={!team.length}>Clear team</button></div>
-      <section className="team-overview" aria-label="Team summary"><TeamSlotGrid slots={planner.slots} heroes={byId} remove={planner.remove} /><TeamSummary heroes={team} /></section>
+      <section className="team-overview" aria-label="Team summary"><TeamSlotGrid slots={planner.slots} heroes={byId} remove={planner.remove} /><TeamSummary heroes={team} /></section><ClassificationDisclaimer />
       <PlannerHeroLibrary heroes={heroes} selected={planner.selected} search={search} element={element} job={job} grouping={grouping} setSearch={setSearch} setElement={setElement} setJob={setJob} setGrouping={setGrouping} toggle={toggle} />
     </>}
   </main>

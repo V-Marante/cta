@@ -5,6 +5,7 @@ import { EmptyState, ErrorState, LoadingState } from './AsyncStates'
 import { FilterToolbar } from './FilterToolbar'
 import { HeroCard } from './HeroCard'
 import { navigate } from '../navigation'
+import { ClassificationDisclaimer } from './ClassificationMarker'
 
 const emptyFilters: Filters = { classes: [], tribes: [], elements: [], damageTypes: [], rarities: [], mobilities: [], acquisitions: [], attributes: [], classifications: [] }
 const initialQuery: HeroQuery = { search: '', heroClass: '', element: '', rarity: '', mobility: '', acquisition: '', attribute: '' }
@@ -22,7 +23,7 @@ export function HeroRoster() {
   }, [query, attempt])
   return <main><header><div><span className="eyebrow">Crush Them All</span><h1 className="page-title" tabIndex={-1}>Hero Library</h1><p>Explore heroes, combat stats, and skills.</p><button className="header-link" onClick={() => navigate('/tier-list')}>Open tier list maker</button></div><div className="orb" aria-hidden="true">CTA</div></header>
     <nav className="page-actions" aria-label="Hero tools"><button className="header-link" onClick={() => navigate('/team-planner')}>Open team planner</button></nav>
-    <FilterToolbar filters={filters} query={query} update={value => setQuery(current => ({ ...current, ...value }))} />
+    <FilterToolbar filters={filters} query={query} update={value => setQuery(current => ({ ...current, ...value }))} /><ClassificationDisclaimer />
     {error ? <ErrorState message={error} retry={retry} /> : loading ? <LoadingState /> : heroes.length === 0 ? <EmptyState /> : <section className="grid" aria-label="Hero roster">{heroes.map(hero => <HeroCard hero={hero} key={hero.id} />)}</section>}
   </main>
 }
